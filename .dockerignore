@@ -1,0 +1,55 @@
+# Git & Version Control
+.git/
+.gitignore
+
+# Môi trường và cấu hình
+.env
+.env.*
+
+# Python / Caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Môi trường ảo (Virtual Environments)
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Logs và Databases cục bộ
+*.log
+*.sqlite3
+
+# Thư mục hệ thống & IDE (không cần cho image)
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Documentation & AI Agents configs
+docs/
+agents/
+skills/
+AGENTS.md
+README.md

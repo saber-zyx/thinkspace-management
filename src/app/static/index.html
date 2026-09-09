@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ThinkSpace Đồng Bộ Và Phân Tích</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link rel="stylesheet" href="styles.css?v=6">
+</head>
+<body>
+    <div class="background-shapes">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+    </div>
+
+    <div class="layout-container">
+        <nav class="sidebar glass-panel">
+            <div class="brand">
+                <span class="brand-text">ThinkSpace</span>
+            </div>
+            <ul class="nav-links">
+                <li><a href="#" class="nav-btn active" data-target="dashboardView">Tổng Quan</a></li>
+                <li><a href="#" class="nav-btn" data-target="learningDashboardView">Bảng Học Tập</a></li>
+                <li><a href="#" class="nav-btn" data-target="uploadView">Tải Lên</a></li>
+            </ul>
+        </nav>
+
+        <main class="content-area">
+            <div id="dashboardView" class="view-section active">
+                <header class="page-header">
+                    <h1>Phân Tích <span class="highlight">Đăng Ký</span></h1>
+                    <p>Theo dõi tiến độ đăng ký sự kiện UII Sandbox 2026.</p>
+                </header>
+
+                <div class="stats-grid">
+                    <div class="stat-card glass-panel">
+                        <div class="stat-title">Tổng Thí Sinh</div>
+                        <div class="stat-value highlight" id="dashTotalUsers">0</div>
+                    </div>
+                    <div class="stat-card glass-panel">
+                        <div class="stat-title">Số Lượng Đội</div>
+                        <div class="stat-value highlight" id="dashTotalTeams">0</div>
+                    </div>
+                    <div class="stat-card glass-panel">
+                        <div class="stat-title">Cá Nhân Tự Do</div>
+                        <div class="stat-value highlight" id="dashTotalIndiv">0</div>
+                    </div>
+                </div>
+
+                <div class="bi-dashboard-grid">
+                    <div class="chart-card glass-panel" style="grid-area: trend;">
+                        <h3>Biểu đồ đăng ký theo thời gian</h3>
+                        <div class="chart-frame chart-frame-trend">
+                            <canvas id="dailyTrendChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card glass-panel" style="grid-area: ratio;">
+                        <h3>Đội vs Cá nhân</h3>
+                        <div class="chart-frame chart-frame-ratio">
+                            <canvas id="ratioChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-card glass-panel" style="grid-area: source;">
+                        <h3>Nguồn biết đến chương trình</h3>
+                        <div class="chart-frame chart-frame-source">
+                            <canvas id="sourceChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card glass-panel" style="grid-area: uni;">
+                        <h3>Trường Đại học</h3>
+                        <div class="chart-frame chart-frame-university">
+                            <canvas id="uniChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-card glass-panel domain-card" style="grid-area: domain;">
+                        <h3>Lĩnh vực hoạt động (Dự án)</h3>
+                        <div id="bubbleChartContainer" class="bubble-frame"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="learningDashboardView" class="view-section">
+                <header class="page-header">
+                    <h1>Bảng Điều Khiển <span class="highlight">Học Tập</span></h1>
+                    <p>Theo dõi mức độ học tập, hoạt động Moodle và tình trạng nộp bài của UII Sandbox 2026.</p>
+                </header>
+
+                <div class="learning-toolbar glass-panel">
+                    <div>
+                        <span class="toolbar-kicker">Chế độ xem</span>
+                        <div class="learning-tabs" role="tablist" aria-label="Bộ lọc dashboard học tập">
+                            <button class="learning-tab active" type="button" data-learning-tab="overview">Tổng quan</button>
+                            <button class="learning-tab" type="button" data-learning-tab="team">Đội</button>
+                            <button class="learning-tab" type="button" data-learning-tab="individual">Cá nhân</button>
+                        </div>
+                    </div>
+                    <div class="learning-refresh">
+                        <span id="learningLastUpdated">Chưa tải dữ liệu</span>
+                        <button class="btn-secondary" type="button" id="refreshLearningDashboardBtn">Làm mới</button>
+                    </div>
+                </div>
+
+                <section class="learning-tab-panel active" id="learningOverviewPanel">
+                    <div class="learning-kpi-grid">
+                        <div class="learning-kpi glass-panel">
+                            <span>Tổng thí sinh</span>
+                            <strong id="learningTotalUsers">0</strong>
+                            <small id="learningAccessedUsers">0 đã học</small>
+                        </div>
+                        <div class="learning-kpi glass-panel">
+                            <span>Chưa bắt đầu</span>
+                            <strong id="learningNotStartedUsers">0</strong>
+                            <small>Cần nhắc truy cập Moodle</small>
+                        </div>
+                        <div class="learning-kpi glass-panel">
+                            <span>Đội đã hoạt động</span>
+                            <strong id="learningActiveTeams">0</strong>
+                            <small id="learningTotalTeams">0 đội tổng</small>
+                        </div>
+                        <div class="learning-kpi glass-panel">
+                            <span>Đã nộp bài</span>
+                            <strong id="learningSubmittedUsers">0</strong>
+                            <small id="learningSubmittedTeams">0 đội đã nộp bài</small>
+                        </div>
+                    </div>
+
+                    <div class="learning-overview-grid">
+                        <div class="learning-card glass-panel">
+                            <h3>Trạng thái học tập</h3>
+                            <div class="learning-chart-frame chart-small">
+                                <canvas id="learningStatusChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="learning-card glass-panel">
+                            <h3>Trạng thái đội</h3>
+                            <div class="learning-chart-frame chart-small">
+                                <canvas id="learningTeamStatusChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="learning-card glass-panel wide-card">
+                            <h3>Hoạt động theo loại nội dung</h3>
+                            <div class="learning-chart-frame chart-medium">
+                                <canvas id="learningActivityTypeChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="learning-table-grid">
+                        <div class="learning-card glass-panel">
+                            <div class="section-heading-row">
+                                <h3>Nội dung được xem nhiều</h3>
+                                <span>Hoạt động nổi bật</span>
+                            </div>
+                            <div class="data-list" id="topViewedActivitiesList"></div>
+                        </div>
+                        <div class="learning-card glass-panel">
+                            <div class="section-heading-row">
+                                <h3>Nội dung ít chú ý</h3>
+                                <span>Cần theo dõi</span>
+                            </div>
+                            <div class="data-list" id="lowAttentionActivitiesList"></div>
+                        </div>
+                    </div>
+
+                    <div class="learning-table-grid">
+                        <div class="learning-card glass-panel">
+                            <div class="section-heading-row">
+                                <h3>Nộp bài</h3>
+                                <span>Hoạt động nộp bài</span>
+                            </div>
+                            <div class="data-table-wrap">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Hoạt động</th>
+                                            <th>Người xem</th>
+                                            <th>Người nộp</th>
+                                            <th>Lần nộp cuối</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="submissionActivitiesTable"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="learning-card glass-panel">
+                            <div class="section-heading-row">
+                                <h3>Đội đã nộp</h3>
+                                <span>Đội đã nộp</span>
+                            </div>
+                            <div class="data-list compact-list" id="submittedTeamsList"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="learning-tab-panel" id="learningTeamPanel">
+                    <div class="learning-card glass-panel">
+                        <div class="section-heading-row">
+                            <h3>Theo dõi theo đội</h3>
+                            <span id="teamPanelSummary">Đang chờ dữ liệu</span>
+                        </div>
+                        <div class="data-table-wrap">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Đội</th>
+                                        <th>Thành viên</th>
+                                        <th>Đã học</th>
+                                        <th>Chưa bắt đầu</th>
+                                        <th>Đã nộp bài</th>
+                                        <th>Hoạt động đã xem</th>
+                                        <th>Trạng thái</th>
+                                        <th>Lần học cuối</th>
+                                        <th>Chi tiết</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="teamLearningTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="learning-tab-panel" id="learningIndividualPanel">
+                    <div class="learning-card glass-panel">
+                        <div class="section-heading-row">
+                            <h3>Theo dõi cá nhân</h3>
+                            <span id="individualPanelSummary">Đang chờ dữ liệu</span>
+                        </div>
+                        <div class="data-table-wrap">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Thí sinh</th>
+                                        <th>Email</th>
+                                        <th>Nhóm Moodle</th>
+                                        <th>Hoạt động đã xem</th>
+                                        <th>Đã nộp bài</th>
+                                        <th>Trạng thái</th>
+                                        <th>Lần học cuối</th>
+                                        <th>Chi tiết</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="individualLearningTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <div id="uploadView" class="view-section">
+                <header class="page-header">
+                    <h1>Đồng Bộ <span class="highlight">Dữ Liệu</span></h1>
+                    <p>Tải file Excel từ Microsoft Forms để hệ thống tự động ghi danh lên Moodle.</p>
+                </header>
+
+                <div class="glass-panel upload-section">
+                    <form id="syncForm">
+                        <div class="input-group">
+                            <label for="courseId">Mã khóa học (Course ID trên Moodle):</label>
+                            <input type="number" id="courseId" required placeholder="VD: 12">
+                        </div>
+
+                        <div class="file-drop-area" id="dropArea">
+                            <span class="file-msg">Kéo thả file Excel (.xlsx) vào đây hoặc bấm để chọn</span>
+                            <input type="file" id="fileInput" accept=".xlsx" required>
+                        </div>
+
+                        <button type="submit" id="submitBtn" class="btn-primary">
+                            <span class="btn-text">Bắt Đầu Đồng Bộ</span>
+                            <div class="loader" id="btnLoader"></div>
+                        </button>
+                    </form>
+                </div>
+
+                <div class="glass-panel result-section hidden" id="resultSection">
+                    <h2>Kết quả Đồng bộ</h2>
+                    <div class="stats result-stats">
+                        <div class="stat-box">
+                            <span class="stat-label">Tổng số dòng</span>
+                            <span class="stat-value" id="statTotal">0</span>
+                        </div>
+                        <div class="stat-box success">
+                            <span class="stat-label">Thành công</span>
+                            <span class="stat-value" id="statSuccess">0</span>
+                        </div>
+                        <div class="stat-box error">
+                            <span class="stat-label">Thất bại</span>
+                            <span class="stat-value" id="statFail">0</span>
+                        </div>
+                    </div>
+                    <div class="log-container">
+                        <h3>Chi tiết Log:</h3>
+                        <button id="downloadNewUsersBtn" class="upload-btn hidden" style="margin-bottom: 15px; background: linear-gradient(135deg, #2ecc71, #27ae60);">
+                            Tải danh sách User mới
+                        </button>
+                        <div id="logOutput" class="log-output"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal chi tiết hoạt động -->
+    <div id="activityDetailModal" class="modal-overlay">
+        <div class="modal-container glass-panel">
+            <header class="modal-header">
+                <h2 id="modalTitle">Chi tiết hoạt động</h2>
+                <button type="button" class="modal-close-btn" id="closeModalBtn">&times;</button>
+            </header>
+            <div class="modal-body">
+                <div class="modal-note">
+                    <strong>Lưu ý:</strong> Những activity/H5P không hiển thị nghĩa là người dùng chưa có log cho hoạt động đó.
+                </div>
+                <div id="modalContent" class="modal-content-list">
+                    <!-- Nội dung động sẽ được gắn vào đây -->
+                    <div style="text-align: center; padding: 2rem; color: var(--text-muted);">Đang tải dữ liệu...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js?v=8"></script>
+    <script src="learning-dashboard.js?v=7"></script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+{
+  "$schema": "AI-Agent-Permissions",
+  "version": "1.1",
+  "description": "Cấu hình phân quyền truy cập file cho các AI Agents trong dự án",
+  "permissions": {
+    "no_access": [
+      ".env",
+      ".env.*",
+      ".git/"
+    ],
+    "read_only": [
+      "AGENTS.md",
+      "agents/**/*",
+      "skills/**/*"
+    ],
+    "requires_human_approval": [
+      "Dockerfile",
+      "compose.yaml",
+      ".gitignore",
+      "*.json",
+      "*.yaml",
+      "*.yml",
+      "docs/requirements.md",
+      "docs/architecture.md"
+    ],
+    "full_access": [
+      "src/**/*",
+      "tests/**/*",
+      "docs/tasks/**/*",
+      "docs/decisions/**/*"
+    ]
+  },
+  "behavior": {
+    "halt_on_security_violation": true,
+    "ask_before_modifying_config": true
+  }
+}

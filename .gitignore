@@ -1,0 +1,33 @@
+# === Environments ===
+.env
+.env.*
+!.env.example
+
+# === Python / Virtual Environments ===
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+ENV/
+
+# === Testing / Coverage ===
+.pytest_cache/
+.coverage
+htmlcov/
+
+# === Build / Packaging ===
+build/
+dist/
+*.egg-info/
+
+# === IDEs & OS Files ===
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# === Logs & Databases ===
+*.log
+*.sqlite3

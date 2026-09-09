@@ -1,0 +1,28 @@
+Index 0: ID
+Index 1: Start time
+Index 2: Completion time
+Index 3: Email
+Index 4: Name
+Index 5: Last modified time
+Index 6: Họ và tên của bạn
+Index 7: Email2
+Index 8: Bạn có phải sinh viên UEH không?
+Index 9: Mã số sinh viên
+Index 10: Khóa - Lớp
+Index 11: Ngành học
+Index 12: Số điện thoại
+Index 13: Ngày sinh
+Index 14: Giới tính
+Index 15: Bạn muốn tham gia chương trình UII Sandbox theo hình thức nào?
+Index 16: Nhóm của bạn có cần thêm thành viên không?
+Index 17: Bạn có phải là trưởng nhóm không?
+Index 18: Danh sách thành viên trong nhóm (Vui lòng sử dụng danh sách mẫu trong phần mô tả và gửi link danh sách thành viên (Google Drive/Dropbox/OneDrive))
+Index 19: Tên ý tưởng
+Index 20: Hãy mô tả ý tưởng của bạn
+Index 21: Hãy nêu các lý do chứng minh đây là một ý tưởng có giá trị và có thể phát triển nhanh trong tương lai
+Index 22: Lĩnh vực hoạt động của dự án?
+Index 23: Problem Statement - Vấn đề ý tưởng đang giải quyết là gì?
+Index 24: Target Audience - Ý tưởng mong muốn giải quyết vấn đề của những đối tượng nào?
+Index 25: Competition - Các ý tưởng/giải pháp tương tự trên thị trường (tại Việt Nam và quốc tế)
+Index 26: Vui lòng cung cấp file giới thiệu về Ý tưởng (nếu có) (Google Drive/Dropbox link)
+Index 27: Bạn biết đến Chương trình ươm tạo tại UII Incubator từ nguồn nào?

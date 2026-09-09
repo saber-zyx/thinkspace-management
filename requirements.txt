@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+pydantic
+email-validator
+pydantic-settings
+httpx
+python-multipart==0.0.9
+openpyxl==3.1.2
+
+# Database
+sqlalchemy
+psycopg2-binary
+pytest
