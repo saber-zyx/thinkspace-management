@@ -183,3 +183,9 @@
 - **Ly do**: Manager can biet nguoi hoc co doc huong dan LMS va co di qua survey hay khong. Khong duoc xem `Course module viewed` la da hoan thanh survey; day chi la tin hieu da xem/mo activity. Tin hieu hoan thanh survey can duoc xac dinh rieng khi log Moodle co event submit/complete phu hop.
 - **Quy tac dem v0**: Cac chi so spotlight chi dem user co trong `gold_registered_user_learning_summary`. Cac log khong map duoc email dang ky khong duoc tinh vao ty le thí sinh.
 - **Ket qua local hien tai**: Guideline LMS co `3` nguoi dang ky da xem; trang survey co `26` nguoi xem; activity survey module `709` chua co registered user nao map duoc; `35` nguoi da truy cap noi dung khac sau cong survey.
+
+## ADR-036: Khong Tron Log He Thong Vao Tuong Tac Hoc Tap
+- **Quyet dinh**: Learning Dashboard chi tinh tuong tac hoc tap bang log cua learner da map duoc vao danh sach dang ky. Log admin/system nhu `Course module created` hoac `Course module updated` duoc hien nhu ghi chu van hanh neu can, khong cong vao KPI nguoi hoc.
+- **Ly do**: Module `712` Foundations hien co log `Course module created/updated` do admin thuc hien, nhung chua co learner interaction. Neu cong log nay vao KPI, manager se hieu nham rang thi sinh da truy cap noi dung.
+- **Quyet dinh Pre-Program Survey**: Spotlight chi hien page `Pre-Program Survey` module `707`. Activity an module `709` khong hien trong spotlight/phieu manager vi no khong phai diem cham truc tiep nguoi hoc thay tren giao dien.
+- **Tac dong**: UI co the hien "co log he thong, chua co thi sinh truy cap" cho activity quan trong, giup phan biet tinh trang cau hinh Moodle voi hanh vi hoc tap that.

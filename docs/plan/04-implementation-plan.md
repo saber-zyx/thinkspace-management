@@ -236,3 +236,11 @@
 - **Spotlight moi**: `key_activity_spotlights` theo doi module `714` guideline LMS, module `707` trang survey, module `709` activity survey, module `712` Foundations subsection.
 - **Pheu survey moi**: `pre_program_gate_summary` theo doi so nguoi da doc guideline, da xem survey page, da mo survey activity, da vao kho tai lieu sau survey, bo qua guideline nhung van vao tai lieu, va xem survey nhung chua vao tai lieu.
 - **Ghi chu hoc tap**: Day la vi du ve dashboard metric theo business question. Truoc khi ve bieu do, can chot cau hoi manager muon tra loi va gan moi chi so voi grain ro rang: ngay, user da dang ky, team, hay Moodle activity.
+
+## TASK-034: Chuan hoa spotlight Pre-Program Survey va Foundations
+- **Trang thai**: Hoan thanh local.
+- **Muc tieu**: Lam ro su khac nhau giua log he thong/admin va tuong tac hoc tap that cua thi sinh trong cac activity trong yeu.
+- **File anh huong**: `src/app/api/moodle_logs.py`, `src/app/static/index.html`, `src/app/static/learning-dashboard.js`, `tests/test_main.py`, `docs/plan/09-decision-log.md`.
+- **Quyet dinh UI**: `Pre-Program Survey` chi hien mot page dang hien thi cho nguoi hoc la module `707`; activity an module `709` khong dua vao spotlight/phieu quan ly.
+- **Quyet dinh metric**: `Foundations of Digital Entrepreneurship Course` module `712` hien note neu chi co log he thong/admin, nhung khong cong vao so nguoi hoc hoac luot xem cua thi sinh.
+- **Ghi chu hoc tap**: Trong log Moodle, cung mot `course module id` co the co log admin/system va log learner. Dashboard phai chot grain va actor ro rang truoc khi tinh KPI.

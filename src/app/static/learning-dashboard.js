@@ -201,7 +201,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const rows = data.key_activity_spotlights || [];
         container.innerHTML = rows.length
-            ? rows.map(row => `
+            ? rows.map(row => {
+                const hasSystemOnlyLog = numberValue(row.unique_viewers) === 0 && numberValue(row.total_moodle_log_rows) > 0;
+                const lastLearnerInteraction = row.last_interaction_at
+                    ? `lần cuối ${formatDateTime(row.last_interaction_at)}`
+                    : 'chưa có thí sinh truy cập';
+                const systemLogNote = hasSystemOnlyLog
+                    ? ` · có ${numberValue(row.total_moodle_log_rows)} log hệ thống, mới nhất ${formatDateTime(row.last_moodle_log_at)}`
+                    : '';
+
+                return `
                 <div class="spotlight-card">
                     <div class="spotlight-label">${escapeHtml(row.spotlight_label || row.activity_name || 'Hoạt động')}</div>
                     <div class="spotlight-title">${escapeHtml(row.activity_name || row.spotlight_label || 'Không xác định')}</div>
@@ -211,10 +220,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span><strong>${numberValue(row.viewer_rate).toFixed(1)}%</strong> thí sinh</span>
                     </div>
                     <div class="spotlight-meta">
-                        ${escapeHtml(activityTypeLabel(row.activity_type))} · module ${escapeHtml(row.moodle_course_module_id || 'N/A')} · lần cuối ${escapeHtml(formatDateTime(row.last_interaction_at))}
+                        ${escapeHtml(activityTypeLabel(row.activity_type))} · module ${escapeHtml(row.moodle_course_module_id || 'N/A')} · ${escapeHtml(lastLearnerInteraction)}${escapeHtml(systemLogNote)}
                     </div>
                 </div>
-            `).join('')
+            `;
+            }).join('')
             : '<p class="empty-state">Chưa có dữ liệu hoạt động trọng yếu.</p>';
     }
 
@@ -232,12 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
             {
                 label: 'Đã xem trang survey',
                 value: summary.survey_page_viewers,
-                help: 'Dấu hiệu người học mở trang hướng dẫn Pre-Program Survey.'
-            },
-            {
-                label: 'Đã mở activity survey',
-                value: summary.survey_activity_users,
-                help: 'Dấu hiệu người học chạm vào activity survey trên Moodle.'
+                help: 'Dấu hiệu người học mở trang Pre-Program Survey đang hiển thị trên Moodle.'
             },
             {
                 label: 'Đã vào kho tài liệu sau survey',

@@ -648,9 +648,8 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
                 FROM (
                     VALUES
                         (1, 'lms_guideline', 'UEH LMS Registration Guideline', 714),
-                        (2, 'pre_program_survey_page', 'Pre-Program Survey - trang hướng dẫn', 707),
-                        (3, 'pre_program_survey_activity', 'Pre-Program Survey - activity survey', 709),
-                        (4, 'foundations_course', 'Foundations of Digital Entrepreneurship Course', 712)
+                        (2, 'pre_program_survey_page', 'Pre-Program Survey', 707),
+                        (3, 'foundations_course', 'Foundations of Digital Entrepreneurship Course', 712)
                 ) AS t(display_order, spotlight_key, spotlight_label, moodle_course_module_id)
             ),
             registered_total AS (
@@ -664,7 +663,14 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
                     t.spotlight_label,
                     t.moodle_course_module_id,
                     COALESCE(MAX(e.activity_type), MAX(d.activity_type), 'unknown') AS activity_type,
-                    COALESCE(MAX(e.activity_name), MAX(d.activity_name), t.spotlight_label) AS activity_name,
+                    CASE
+                        WHEN t.spotlight_key = 'pre_program_survey_page'
+                            THEN t.spotlight_label
+                        ELSE COALESCE(MAX(e.activity_name), MAX(d.activity_name), t.spotlight_label)
+                    END AS activity_name,
+                    COALESCE(MAX(d.total_event_rows), 0) AS total_moodle_log_rows,
+                    COALESCE(MAX(d.learning_event_rows), 0) AS total_learning_log_rows,
+                    COALESCE(MAX(d.unique_learning_users), 0) AS total_learning_log_users,
                     COUNT(u.email) FILTER (WHERE e.is_access_event = TRUE) AS access_event_count,
                     COUNT(DISTINCT u.email) FILTER (
                         WHERE e.is_access_event = TRUE
@@ -680,7 +686,8 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
                     ) AS unique_submitters,
                     MAX(e.event_time) FILTER (
                         WHERE u.email IS NOT NULL
-                    ) AS last_interaction_at
+                    ) AS last_interaction_at,
+                    MAX(d.last_seen_at) AS last_moodle_log_at
                 FROM target_activities t
                 LEFT JOIN dim_moodle_course_activities d
                     ON d.moodle_course_module_id = t.moodle_course_module_id
@@ -730,13 +737,6 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
                           AND e.is_access_event = TRUE
                     ) > 0 AS viewed_survey_page,
                     COUNT(*) FILTER (
-                        WHERE e.moodle_course_module_id = 709
-                    ) > 0 AS touched_survey_activity,
-                    COUNT(*) FILTER (
-                        WHERE e.moodle_course_module_id = 709
-                          AND e.is_submission_final_event = TRUE
-                    ) > 0 AS submitted_survey_activity,
-                    COUNT(*) FILTER (
                         WHERE e.is_access_event = TRUE
                           AND e.moodle_course_module_id IS NOT NULL
                           AND e.moodle_course_module_id NOT IN (707, 709, 714)
@@ -750,8 +750,6 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
                 COUNT(*) AS total_registered_users,
                 COUNT(*) FILTER (WHERE viewed_lms_guideline = TRUE) AS guideline_viewers,
                 COUNT(*) FILTER (WHERE viewed_survey_page = TRUE) AS survey_page_viewers,
-                COUNT(*) FILTER (WHERE touched_survey_activity = TRUE) AS survey_activity_users,
-                COUNT(*) FILTER (WHERE submitted_survey_activity = TRUE) AS survey_submitters,
                 COUNT(*) FILTER (WHERE accessed_content_after_gate = TRUE) AS post_gate_content_users,
                 COUNT(DISTINCT team_name_key) FILTER (
                     WHERE accessed_content_after_gate = TRUE
@@ -948,6 +946,9 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
                 "viewer_rate": float(row["viewer_rate"] or 0),
                 "last_interaction_at": row["last_interaction_at"].isoformat()
                 if row["last_interaction_at"]
+                else None,
+                "last_moodle_log_at": row["last_moodle_log_at"].isoformat()
+                if row["last_moodle_log_at"]
                 else None,
             }
             for row in key_activity_spotlights
