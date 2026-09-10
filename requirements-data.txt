@@ -1,0 +1,2 @@
+# Công cụ dành cho pipeline dữ liệu và transform analytics.
+dbt-postgres==1.11.0

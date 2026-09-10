@@ -203,3 +203,27 @@
 - **File ảnh hưởng**: `docs/plan/15-moodle-log-ingestion-architecture.md`, `docs/plan/09-decision-log.md`.
 - **Quyết định kỹ thuật**: Không scrape HTML Live logs làm nguồn chính. Ưu tiên Moodle External Database Log Store hoặc quyền đọc database log Moodle, sau đó dùng watermark để lấy incremental.
 - **Ghi chú học tập**: Đây là bước chuyển từ batch thủ công sang pipeline dữ liệu. Khái niệm cần nắm là watermark: lưu mốc log cuối đã xử lý để lần sau chỉ lấy phần mới.
+
+## TASK-030: Tạo script seed dữ liệu demo sang Neon
+- **Trạng thái**: Hoàn thành
+- **Mục tiêu**: Cho phép đưa dữ liệu dashboard đang đúng ở PostgreSQL local sang Neon mà không upload lại qua UI và không gọi Moodle API.
+- **File ảnh hưởng**: `scripts/seed-neon-demo.ps1`, `docs/plan/14-demo-deploy-render-neon.md`, `docs/plan/09-decision-log.md`.
+- **Lỗi đã xử lý**: File dump đầu tiên chứa bảng backup tạm nên restore lỗi relation không tồn tại. File dump tiếp theo dùng `INSERT` không có tên cột nên restore lỗi lệch kiểu dữ liệu giữa local và Neon. Script mới dump schema bảng chính và data bằng `--column-inserts`.
+- **Ghi chú học tập**: Khi migrate dữ liệu giữa hai database cùng engine nhưng schema có thể lệch, nên ưu tiên restore schema khớp trước rồi dùng insert có tên cột hoặc dump custom format.
+
+## TASK-031: Khởi tạo dbt project cho transform Moodle analytics
+- **Trạng thái**: Hoàn thành
+- **Mục tiêu**: Bắt đầu đưa tool Data Engineer vào pipeline bằng dbt, trước mắt chuyển logic identity mapping sang model SQL có source, staging, intermediate và test.
+- **File ảnh hưởng**: `requirements-data.txt`, `.gitignore`, `analytics/dbt_thinkspace/`, `docs/plan/16-dbt-transformation-workflow.md`, `docs/plan/09-decision-log.md`.
+- **Model đầu tiên**: `int_moodle_user_identity_map`, grain `một dòng = một Moodle participant đã được map sang registration nếu email khớp`.
+- **Kết quả kiểm chứng**: `dbt debug`, `dbt run`, `dbt test` đều chạy thành công trên PostgreSQL local; dbt tạo `3` view trong schema `analytics` và `18` data tests pass. `analytics.int_moodle_user_identity_map` có `113` dòng.
+- **Ghi chú học tập**: dbt không thay thế database. dbt quản lý SQL transform trong database, giúp mô hình dữ liệu có version, test và lineage rõ ràng hơn. Dependency dbt được tách sang `requirements-data.txt` để web app deploy không phải cài tool pipeline.
+
+## TASK-032: Nap file Moodle log moi nhat vao dashboard local
+- **Trang thai**: Hoan thanh phan local, cho seed Neon de cap nhat web service.
+- **Muc tieu**: Dua file log moi nhat trong `example/` vao PostgreSQL local de dashboard localhost phan anh du lieu hoc tap moi truoc khi quay lai thiet ke live logs.
+- **File log da nap**: `example/logs_SANDBOX2026_20260910-0640.csv`.
+- **Ket qua import**: File co `4342` dong; he thong them `151` event moi, bo qua `4015` event trung, loai `176` event nam trong danh sach exclude, va khong co dong loi parse.
+- **So lieu local sau import**: `bronze_moodle_log_events = 4176`, `bronze learning events = 2068`, `silver_moodle_learning_events = 2068`, `learning users = 55`, `learning emails = 55`, `learning teams = 17`, `latest_event_time = 2026-09-10 06:40:15+00`.
+- **So lieu dashboard registered local**: `total_registered_users = 101`, `accessed_users = 49`, `not_started_users = 52`, `submitted_users = 1`, `total_teams = 22`, `active_teams = 17`, `not_started_teams = 5`, `total_individuals = 18`, `accessed_individuals = 12`.
+- **Ghi chu van hanh**: Render hien van doc du lieu Neon cu cho den khi chay lai `scripts/seed-neon-demo.ps1 -ResetTarget` voi `TARGET_DATABASE_URL`. Connection string Neon khong duoc ghi vao chat, docs hoac Git.

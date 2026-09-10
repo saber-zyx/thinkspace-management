@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
 
 # Lấy thông tin database từ biến môi trường.
@@ -13,6 +13,14 @@ if not DATABASE_URL.startswith("postgresql"):
     DATABASE_URL = "sqlite:///./test.db"
 
 engine = create_engine(DATABASE_URL)
+
+if DATABASE_URL.startswith("postgresql"):
+    @event.listens_for(engine, "connect")
+    def set_postgresql_search_path(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("SET search_path TO public")
+        cursor.close()
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 REGISTRATION_LONG_TEXT_COLUMNS = (

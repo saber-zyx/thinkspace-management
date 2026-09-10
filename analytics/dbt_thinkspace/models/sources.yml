@@ -1,0 +1,47 @@
+version: 2
+
+sources:
+  - name: app_public
+    description: "Các bảng nguồn do app FastAPI nạp vào PostgreSQL."
+    schema: public
+    tables:
+      - name: registrations
+        description: "Một dòng đại diện cho một người đăng ký hợp lệ từ file đăng ký chương trình."
+        columns:
+          - name: id
+            tests:
+              - not_null
+              - unique
+          - name: email
+            tests:
+              - not_null
+
+      - name: raw_moodle_participants
+        description: "Một dòng đại diện cho một participant trong file export Participants của Moodle."
+        columns:
+          - name: id
+            tests:
+              - not_null
+              - unique
+          - name: email
+            tests:
+              - not_null
+          - name: participant_hash
+            tests:
+              - not_null
+              - unique
+
+      - name: bronze_moodle_log_events
+        description: "Một dòng đại diện cho một Moodle log event đã được parse và ép kiểu cơ bản."
+        columns:
+          - name: id
+            tests:
+              - not_null
+              - unique
+          - name: event_hash
+            tests:
+              - not_null
+              - unique
+          - name: event_time
+            tests:
+              - not_null

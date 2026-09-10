@@ -149,3 +149,31 @@
 - **Lý do**: Live logs là giao diện cho người quản trị xem, không phải contract dữ liệu ổn định. Pipeline data engineer cần nguồn có schema, watermark và khả năng audit.
 - **Cơ chế incremental**: Dùng watermark theo `last_moodle_log_id` hoặc `last_event_time`, chỉ lấy log mới, rồi ghi vào raw/bronze và refresh silver/gold.
 - **Tài liệu vận hành**: Xem `docs/plan/15-moodle-log-ingestion-architecture.md`.
+
+## ADR-031: Seed Demo Neon Bằng Schema + Column Inserts
+- **Quyết định**: Khi seed dữ liệu demo từ PostgreSQL local sang Neon, dùng script `scripts/seed-neon-demo.ps1` để restore schema của các bảng chính trước, sau đó restore data bằng `pg_dump --column-inserts`.
+- **Lý do**: Restore bằng data-only không có tên cột dễ lỗi nếu thứ tự cột giữa local và Neon lệch. Ngoài ra database local có nhiều bảng backup/audit tạm, không nên đưa toàn bộ lên Neon demo.
+- **Bảng được seed**: `sync_jobs`, `registrations`, `raw_moodle_log_files`, `raw_moodle_participant_files`, `raw_moodle_participants`, `bronze_moodle_log_events`, `moodle_log_user_exclusions`, `moodle_participant_email_exclusions`.
+- **Cập nhật vận hành**: Sau khi restore data, script tạm set `DATABASE_URL` sang Neon và import `src.app.main` để tạo lại các view phân tích `int/silver/gold` ngay từ local.
+- **Cập nhật lỗi script**: PowerShell cần ghép tham số `pg_dump` vào biến mảng trước khi gọi helper. Nếu gọi helper rồi cộng mảng ở ngoài, tham số `-f /tmp/...` không được truyền đúng và dump sẽ in ra console.
+- **Ghi chú bảo mật**: Connection string Neon chỉ được truyền bằng biến môi trường `TARGET_DATABASE_URL`, không ghi vào docs, code hoặc Git.
+
+## ADR-032: Bắt Đầu Chuyển Transform Sang dbt
+- **Quyết định**: Thêm dbt project tại `analytics/dbt_thinkspace` và chuyển model đầu tiên `int_moodle_user_identity_map` sang dbt.
+- **Lý do**: Python startup hook phù hợp cho MVP nhanh, nhưng pipeline Data Engineer cần SQL transform có cấu trúc, có test, có lineage và có thể chạy độc lập theo lịch. dbt là tool phù hợp cho lớp transform `staging -> intermediate -> marts`.
+- **Phạm vi hiện tại**: Chưa xóa các hàm ensure view trong FastAPI. dbt project chạy song song để học và kiểm chứng trước, sau đó mới chuyển dần `silver/gold`.
+- **Schema dbt**: Các model dbt được tạo trong schema `analytics`; các bảng nguồn của app vẫn ở schema `public`. Cách này tránh làm ảnh hưởng dashboard hiện tại trong lúc học và chuyển đổi dần.
+- **Dependency mới**: `dbt-postgres==1.11.0` trong `requirements-data.txt`, tách khỏi `requirements.txt` của web app.
+- **Tài liệu học tập**: Xem `docs/plan/16-dbt-transformation-workflow.md`.
+
+## ADR-033: Cap Nhat Demo Web Bang Batch Seed Truoc Khi Co Live Ingestion
+- **Quyet dinh**: Trong giai doan demo ngay 2026-09-10, dashboard localhost duoc cap nhat bang cach import file Moodle log CSV moi nhat vao PostgreSQL local, sau do seed lai Neon cho Render doc du lieu moi.
+- **Ly do**: Live logs/incremental ingestion chua duoc xay dung xong, nen batch seed la cach nhanh va kiem soat duoc de dua so lieu moi len demo web cho manager xem truoc.
+- **Ranh gioi hien tai**: Cach nay khong phai pipeline tu dong dai han. Buoc live ingestion sau se can watermark, lich chay, log audit va co che retry.
+- **Ket qua kiem chung local**: Sau khi nap `logs_SANDBOX2026_20260910-0640.csv`, local co `4176` bronze events, `2068` silver learning events, `55` learning emails va `17` learning teams.
+- **Ghi chu bao mat**: Connection string Neon chi duoc truyen qua bien moi truong `TARGET_DATABASE_URL`, khong ghi vao code, docs, Git hoac noi dung chat.
+
+## ADR-034: Ep PostgreSQL Search Path Ve Public Khi Ket Noi Neon
+- **Quyet dinh**: App FastAPI dung SQLAlchemy event `connect` de chay `SET search_path TO public` sau khi mo ket noi PostgreSQL.
+- **Ly do**: Sau khi reset schema tren Neon, ket noi co the bao loi `no schema has been selected to create in` khi SQLAlchemy chay `CREATE TABLE`. Tuy nhien Neon pooler khong chap nhan startup parameter `options=search_path`, nen khong duoc dua `search_path` vao URL hoac `connect_args`. Cach dung event sau ket noi phu hop hon voi pooler.
+- **Ket qua kiem chung**: Script seed Neon da chay thanh cong; Neon co `4176` bronze events, `113` Moodle participants va `101` registrations. API Render da doc du lieu moi tu Neon.

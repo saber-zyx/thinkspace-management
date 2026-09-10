@@ -1,0 +1,27 @@
+version: 2
+
+models:
+  - name: int_moodle_user_identity_map
+    description: "Bảng ánh xạ danh tính Moodle participant với người đăng ký chương trình bằng email."
+    columns:
+      - name: participant_id
+        description: "Khóa participant từ bảng raw_moodle_participants."
+        tests:
+          - not_null
+          - unique
+      - name: email
+        description: "Email đã chuẩn hóa, dùng làm khóa nối chính giữa Moodle participants và registrations."
+        tests:
+          - not_null
+      - name: identity_status
+        description: "Trạng thái kiểm tra mapping giữa Moodle group và team đăng ký."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - unmatched_registration
+                  - matched_without_moodle_group
+                  - matched_without_registration_team
+                  - matched_same_team
+                  - matched_team_conflict

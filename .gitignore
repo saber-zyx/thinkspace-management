@@ -31,3 +31,11 @@ Thumbs.db
 # === Logs & Databases ===
 *.log
 *.sqlite3
+
+# === dbt / Data Pipeline Artifacts ===
+analytics/dbt_thinkspace/target/
+analytics/dbt_thinkspace/logs/
+analytics/dbt_thinkspace/dbt_packages/
+analytics/dbt_thinkspace/profiles.yml
+analytics/dbt_thinkspace/.user.yml
+thinkspace_demo_seed*.sql

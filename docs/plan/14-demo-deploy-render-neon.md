@@ -92,11 +92,45 @@ Lưu ý bảo mật:
 /api/v1/moodle-logs/learning-dashboard-overview
 ```
 
+## Seed Dữ Liệu Demo Từ Local Sang Neon
+
+Không upload lại file đăng ký lên cloud demo nếu không cần gọi Moodle. Với demo dashboard, cách đúng là seed dữ liệu từ PostgreSQL local sang Neon.
+
+Script hỗ trợ:
+
+```text
+scripts/seed-neon-demo.ps1
+```
+
+Cách chạy trong PowerShell:
+
+```powershell
+$env:TARGET_DATABASE_URL="connection string Neon"
+.\scripts\seed-neon-demo.ps1 -ResetTarget
+Remove-Item Env:\TARGET_DATABASE_URL
+```
+
+Nếu Neon hiển thị hai connection string, ưu tiên dùng `Direct connection` cho bước seed dữ liệu. Connection pooler vẫn phù hợp cho app đọc dashboard, nhưng thao tác restore schema/data nên dùng direct connection khi có thể.
+
+Script sẽ:
+
+- Dump schema của các bảng chính từ PostgreSQL local.
+- Dump data bằng `--column-inserts` để tránh lệch thứ tự cột giữa local và Neon.
+- Reset schema `public` trên Neon nếu truyền `-ResetTarget`.
+- Restore schema và data lên Neon.
+- Gọi code app để tạo lại các view phân tích `int/silver/gold`.
+- Kiểm tra số dòng của `registrations`, `raw_moodle_participants`, `bronze_moodle_log_events`.
+
+Không commit connection string Neon vào Git. Chỉ set tạm bằng biến môi trường trong terminal.
+
+Sau khi seed xong, mở lại app Render và bấm `Ctrl + F5` để kiểm tra dashboard.
+
 ## Rủi Ro Demo
 
 - Nếu database Neon trống, dashboard sẽ chưa có số liệu cho đến khi import dữ liệu.
 - Nếu deploy bằng Dockerfile hiện tại, Dockerfile đang bind port `8000`. Render thường nên dùng `$PORT`, nên bản demo khuyến nghị chạy Python native trước.
 - Nếu upload dữ liệu trên cloud demo, cần đảm bảo không dùng dữ liệu nhạy cảm hoặc credentials thật khi chưa thống nhất quyền truy cập.
+- Nếu dùng file dump data-only không có tên cột, restore có thể lỗi khi thứ tự cột giữa local và Neon lệch nhau. Vì vậy script seed demo dùng `--column-inserts`.
 
 ## Bài Tập Nhỏ Cho Bạn
 
