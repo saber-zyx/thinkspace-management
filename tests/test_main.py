@@ -11,6 +11,7 @@ from src.app.models.schema import (
     Base,
     BronzeMoodleLogEvent,
     MoodleParticipantEmailExclusion,
+    RawUehLmsCourseEnrollment,
     RawMoodleParticipant,
     Registration,
 )
@@ -298,6 +299,29 @@ class TestBasicSetup(unittest.TestCase):
         self.assertEqual(second_report["inserted_count"], 0)
         self.assertEqual(second_report["duplicate_count"], 2)
         self.assertEqual(event_count, 2)
+        db.close()
+
+    def test_moodle_log_import_accepts_vietnamese_ueh_lms_enrollment_log(self):
+        engine = create_engine("sqlite:///:memory:")
+        TestingSession = sessionmaker(bind=engine)
+        Base.metadata.create_all(bind=engine)
+        db = TestingSession()
+        csv_content = "\n".join([
+            "Thời gian,Tên đầy đủ,người dùng bị ảnh hưởng,Bối cảnh của sự kiện,thành phần,Tên sự kiện,Mô tả,Nguyên thủy,Địa chỉ giao thức mạng(IP)",
+            "10/9/2026 9:43,duyhoang040106@gmail.com,duyhoang040106@gmail.com,Khoá học: Nền tảng Khởi nghiệp Kỹ thuật số,Hệ thống,Người dùng đã ghi danh khóa học,The user with id '1384878' enrolled the user with id '1384878' using the enrolment method 'self' in the course with id '42246'.,web,171.251.234.187",
+        ]).encode("utf-8")
+
+        report = import_moodle_log_csv(db, csv_content, "ueh_lms.csv")
+
+        event = db.query(BronzeMoodleLogEvent).one()
+        enrollment = db.query(RawUehLmsCourseEnrollment).one()
+        self.assertEqual(report["inserted_count"], 1)
+        self.assertEqual(event.event_name_raw, "User enrolled in course")
+        self.assertEqual(event.component_raw, "System")
+        self.assertEqual(event.moodle_course_id, 42246)
+        self.assertEqual(event.context_type, "Course")
+        self.assertEqual(enrollment.email, "duyhoang040106@gmail.com")
+        self.assertEqual(enrollment.external_course_key, "fmc3_entrepreneurship")
         db.close()
 
     def test_moodle_participant_parser_builds_identity_keys(self):

@@ -212,7 +212,14 @@ def ensure_moodle_silver_learning_events_view() -> None:
                         'H5P content viewed',
                         'xAPI statement received',
                         'The status of the submission has been viewed.',
-                        'Submission form viewed.'
+                        'Submission form viewed.',
+                        'SCO launched',
+                        'SCORM status submitted',
+                        'SCORM raw score submitted',
+                        'Quiz attempt viewed',
+                        'Quiz attempt reviewed',
+                        'Quiz attempt started',
+                        'Quiz attempt summary viewed'
                     ) AS is_view_event,
                     b.event_name_raw IN (
                         'Course viewed',
@@ -221,7 +228,14 @@ def ensure_moodle_silver_learning_events_view() -> None:
                         'H5P content viewed',
                         'xAPI statement received',
                         'The status of the submission has been viewed.',
-                        'Submission form viewed.'
+                        'Submission form viewed.',
+                        'SCO launched',
+                        'SCORM status submitted',
+                        'SCORM raw score submitted',
+                        'Quiz attempt viewed',
+                        'Quiz attempt reviewed',
+                        'Quiz attempt started',
+                        'Quiz attempt summary viewed'
                     ) AS is_access_event,
                     b.event_name_raw IN (
                         'Submission created.',
@@ -229,12 +243,26 @@ def ensure_moodle_silver_learning_events_view() -> None:
                         'A file has been uploaded.',
                         'An online text has been uploaded.',
                         'A submission has been submitted.',
-                        'The status of the submission has been updated.'
+                        'The status of the submission has been updated.',
+                        'Quiz attempt submitted',
+                        'Course module completion updated'
                     ) AS is_submission_event,
-                    b.event_name_raw = 'A submission has been submitted.' AS is_submission_final_event,
-                    b.event_name_raw = 'A submission has been submitted.' AS is_completion_event,
+                    b.event_name_raw IN (
+                        'A submission has been submitted.',
+                        'Quiz attempt submitted',
+                        'Course module completion updated'
+                    ) AS is_submission_final_event,
+                    b.event_name_raw IN (
+                        'A submission has been submitted.',
+                        'Quiz attempt submitted',
+                        'Course module completion updated'
+                    ) AS is_completion_event,
                     CASE
-                        WHEN b.event_name_raw = 'A submission has been submitted.' THEN 'submission_final'
+                        WHEN b.event_name_raw IN (
+                            'A submission has been submitted.',
+                            'Quiz attempt submitted',
+                            'Course module completion updated'
+                        ) THEN 'submission_final'
                         WHEN b.event_name_raw IN (
                             'Submission created.',
                             'Submission updated.',
@@ -249,7 +277,14 @@ def ensure_moodle_silver_learning_events_view() -> None:
                             'H5P content viewed',
                             'xAPI statement received',
                             'The status of the submission has been viewed.',
-                            'Submission form viewed.'
+                            'Submission form viewed.',
+                            'SCO launched',
+                            'SCORM status submitted',
+                            'SCORM raw score submitted',
+                            'Quiz attempt viewed',
+                            'Quiz attempt reviewed',
+                            'Quiz attempt started',
+                            'Quiz attempt summary viewed'
                         ) THEN 'access'
                         ELSE 'other_learning'
                     END AS progress_signal_type,

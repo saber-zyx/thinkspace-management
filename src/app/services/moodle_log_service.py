@@ -7,7 +7,12 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from src.app.models.schema import BronzeMoodleLogEvent, MoodleLogUserExclusion, RawMoodleLogFile
+from src.app.models.schema import (
+    BronzeMoodleLogEvent,
+    MoodleLogUserExclusion,
+    RawMoodleLogFile,
+    RawUehLmsCourseEnrollment,
+)
 
 
 REQUIRED_LOG_HEADERS = {
@@ -20,6 +25,64 @@ REQUIRED_LOG_HEADERS = {
     "Description",
     "Origin",
     "IP address",
+}
+
+HEADER_ALIASES = {
+    "Thời gian": "Time",
+    "Tên đầy đủ": "User full name",
+    "người dùng bị ảnh hưởng": "Affected user",
+    "Bối cảnh của sự kiện": "Event context",
+    "thành phần": "Component",
+    "Tên sự kiện": "Event name",
+    "Mô tả": "Description",
+    "Nguyên thủy": "Origin",
+    "Địa chỉ giao thức mạng(IP)": "IP address",
+}
+
+COMPONENT_ALIASES = {
+    "Hệ thống": "System",
+    "Các file logs": "Logs",
+    "Gói SCORM": "SCORM",
+    "Bài trắc nghiệm": "Quiz",
+    "Trang": "Page",
+    "Diễn đàn": "Forum",
+    "Báo cáo người dùng": "User report",
+    "Báo cáo tổng quan": "Overview report",
+    "Báo cáo của người chấm điểm": "Grader report",
+}
+
+EVENT_NAME_ALIASES = {
+    "Đã xem báo cáo log": "Log report viewed",
+    "Danh sách người dùng đã được xem": "User list viewed",
+    "Mô-đun khóa học đã xem": "Course module viewed",
+    "Đã xem khóa học": "Course viewed",
+    "Người dùng đã ghi danh khóa học": "User enrolled in course",
+    "Vai trò đã được bổ nhiệm": "Role assigned",
+    "Đã cập nhật mô đun khóa học": "Course module updated",
+    "Đã tạo mô đun khóa học": "Course module created",
+    "Một phần khóa học đã được khởi tạo": "Course section created",
+    "Phân mục khóa học đã được cập nhật": "Course section updated",
+    "Sco đã được ra mắt": "SCO launched",
+    "Đã gửi trạng thái SCORM": "SCORM status submitted",
+    "Đã gửi điểm SCORM trần": "SCORM raw score submitted",
+    "Bài làm trắc nghiệm đã được xem": "Quiz attempt viewed",
+    "Bài làm trắc nghiệm đã được xem lại": "Quiz attempt reviewed",
+    "Bài làm trắc nghiệm đã bắt đầu": "Quiz attempt started",
+    "Đã nộp bài làm trắc nghiệm": "Quiz attempt submitted",
+    "Tổng quan bài làm trắc nghiệm đã được xem": "Quiz attempt summary viewed",
+    "Trang chỉnh sửa bài trắc nghiệm đã được xem": "Quiz editing page viewed",
+    "Hoàn thành mô-đun khóa học được cập nhật": "Course module completion updated",
+    "Điểm người dùng được chỉnh sửa trong sổ điểm": "Grade user report edited",
+}
+
+CONTEXT_TYPE_ALIASES = {
+    "Khoá học": "Course",
+    "Gói SCORM": "SCORM",
+    "Bài trắc nghiệm": "Quiz",
+    "Trang": "Page",
+    "Diễn đàn": "Forum",
+    "Khác": "Other",
+    "H5P": "H5P",
 }
 
 LEARNING_EVENT_NAMES = {
@@ -36,6 +99,15 @@ LEARNING_EVENT_NAMES = {
     "An online text has been uploaded.",
     "A submission has been submitted.",
     "The status of the submission has been updated.",
+    "SCO launched",
+    "SCORM status submitted",
+    "SCORM raw score submitted",
+    "Quiz attempt viewed",
+    "Quiz attempt reviewed",
+    "Quiz attempt started",
+    "Quiz attempt submitted",
+    "Quiz attempt summary viewed",
+    "Course module completion updated",
 }
 
 VIEW_EVENT_NAMES = {
@@ -46,6 +118,13 @@ VIEW_EVENT_NAMES = {
     "xAPI statement received",
     "The status of the submission has been viewed.",
     "Submission form viewed.",
+    "SCO launched",
+    "SCORM status submitted",
+    "SCORM raw score submitted",
+    "Quiz attempt viewed",
+    "Quiz attempt reviewed",
+    "Quiz attempt started",
+    "Quiz attempt summary viewed",
 }
 
 SUBMISSION_WORK_EVENT_NAMES = {
@@ -64,6 +143,7 @@ REPORT_COMPONENTS = {
     "Logs",
     "Live logs",
     "User report",
+    "Overview report",
     "Grader report",
     "Single view",
 }
@@ -78,7 +158,16 @@ ADMIN_EVENT_NAMES = {
     "Group deleted",
     "Grade deleted",
     "Course module updated",
+    "Course module created",
+    "Course section created",
+    "Course section updated",
+    "Grade user report edited",
 }
+
+UEH_LMS_ENTREPRENEURSHIP_COURSE_ID = 42246
+UEH_LMS_ENTREPRENEURSHIP_KEY = "fmc3_entrepreneurship"
+UEH_LMS_ENTREPRENEURSHIP_NAME = "Nền tảng Khởi nghiệp Kỹ thuật số"
+EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 USER_ID_PATTERN = re.compile(r"user with (?:the )?id '(-?\d+)'", re.IGNORECASE)
 COURSE_ID_PATTERN = re.compile(r"course with (?:the )?id '(\d+)'", re.IGNORECASE)
@@ -93,7 +182,7 @@ def import_moodle_log_csv(
     source_type: str = "manual_upload",
 ) -> dict[str, Any]:
     text = content.decode("utf-8-sig")
-    rows = list(csv.DictReader(io.StringIO(text)))
+    rows = [normalize_log_row(row) for row in csv.DictReader(io.StringIO(text))]
     headers = set(rows[0].keys()) if rows else set()
     missing_headers = sorted(REQUIRED_LOG_HEADERS - headers)
 
@@ -119,6 +208,7 @@ def import_moodle_log_csv(
     course_ids = []
 
     excluded_count = 0
+    entrepreneurship_enrollment_emails = set()
     excluded_user_ids = get_active_excluded_moodle_user_ids(db)
     seen_logical_keys: dict[tuple[str, ...], int] = {}
 
@@ -140,6 +230,10 @@ def import_moodle_log_csv(
             ):
                 excluded_count += 1
                 continue
+            if is_ueh_lms_entrepreneurship_enrollment(parsed_event):
+                email = extract_enrollment_email(row)
+                if email:
+                    entrepreneurship_enrollment_emails.add(email)
             parsed_events.append(parsed_event)
             event_times.append(parsed_event.event_time)
             if parsed_event.moodle_course_id is not None:
@@ -168,6 +262,10 @@ def import_moodle_log_csv(
         new_events.append(event)
 
     db.add_all(new_events)
+    insert_ueh_lms_entrepreneurship_enrollments(
+        db=db,
+        emails=entrepreneurship_enrollment_emails,
+    )
     raw_file.inserted_count = len(new_events)
     raw_file.duplicate_count = duplicate_count
     raw_file.failed_count = len(errors)
@@ -229,7 +327,15 @@ def parse_moodle_time(value: str) -> datetime:
     if not cleaned:
         raise ValueError("Thiếu Time")
 
-    for date_format in ("%d/%m/%y, %H:%M:%S", "%m/%d/%y, %H:%M:%S", "%Y-%m-%d %H:%M:%S"):
+    for date_format in (
+        "%d/%m/%y, %H:%M:%S",
+        "%m/%d/%y, %H:%M:%S",
+        "%d/%m/%Y %H:%M",
+        "%d/%m/%Y %H:%M:%S",
+        "%m/%d/%Y %H:%M",
+        "%m/%d/%Y %H:%M:%S",
+        "%Y-%m-%d %H:%M:%S",
+    ):
         try:
             return datetime.strptime(cleaned, date_format)
         except ValueError:
@@ -246,7 +352,21 @@ def split_event_context(value: str | None) -> tuple[str | None, str | None]:
     if not separator:
         return None, value.strip()
 
-    return clean_value(context_type), clean_value(context_name)
+    cleaned_type = clean_value(context_type)
+    return CONTEXT_TYPE_ALIASES.get(cleaned_type, cleaned_type), clean_value(context_name)
+
+
+def normalize_log_row(row: dict[str, str]) -> dict[str, str | None]:
+    normalized = {}
+    for key, value in row.items():
+        canonical_key = HEADER_ALIASES.get(key, key)
+        normalized[canonical_key] = value
+
+    component = clean_value(normalized.get("Component"))
+    event_name = clean_value(normalized.get("Event name"))
+    normalized["Component"] = COMPONENT_ALIASES.get(component, component)
+    normalized["Event name"] = EVENT_NAME_ALIASES.get(event_name, event_name)
+    return normalized
 
 
 def classify_event(component: str | None, event_name: str | None, user_full_name: str | None) -> str:
@@ -338,6 +458,53 @@ def get_active_excluded_moodle_user_ids(db: Session) -> set[int]:
         .filter(MoodleLogUserExclusion.is_active == True)
         .all()
     }
+
+
+def is_ueh_lms_entrepreneurship_enrollment(event: BronzeMoodleLogEvent) -> bool:
+    return (
+        event.moodle_course_id == UEH_LMS_ENTREPRENEURSHIP_COURSE_ID
+        and event.event_name_raw == "User enrolled in course"
+    )
+
+
+def extract_enrollment_email(row: dict[str, str | None]) -> str | None:
+    for column_name in ("Affected user", "User full name"):
+        value = clean_value(row.get(column_name))
+        if value and EMAIL_PATTERN.match(value):
+            return value.lower()
+    return None
+
+
+def insert_ueh_lms_entrepreneurship_enrollments(
+    db: Session,
+    emails: set[str],
+) -> None:
+    if not emails:
+        return
+
+    existing_emails = {
+        value
+        for (value,) in db.query(RawUehLmsCourseEnrollment.email)
+        .filter(
+            RawUehLmsCourseEnrollment.external_course_key == UEH_LMS_ENTREPRENEURSHIP_KEY,
+            RawUehLmsCourseEnrollment.email.in_(emails),
+        )
+        .all()
+    }
+
+    new_enrollments = [
+        RawUehLmsCourseEnrollment(
+            source_system="ueh_lms_log",
+            external_course_key=UEH_LMS_ENTREPRENEURSHIP_KEY,
+            external_course_name=UEH_LMS_ENTREPRENEURSHIP_NAME,
+            email_raw=email,
+            email=email,
+            full_name_raw=email,
+            enrollment_status="enrolled",
+        )
+        for email in sorted(emails - existing_emails)
+    ]
+    db.add_all(new_enrollments)
 
 
 def build_import_report(raw_file: RawMoodleLogFile, errors: list[str], excluded_count: int = 0) -> dict[str, Any]:

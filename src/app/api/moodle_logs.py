@@ -1150,7 +1150,16 @@ def get_ueh_lms_entrepreneurship_enrollments_detail(
             SELECT
                 COALESCE((SELECT SUM(registration_rows) FROM registered), 0) AS total_registered_users,
                 COUNT(r.email) FILTER (WHERE e.email IS NOT NULL) AS enrolled_registered_users,
-                COALESCE((SELECT COUNT(*) FROM enrolled), 0) AS source_enrolled_emails
+                COALESCE((SELECT COUNT(*) FROM enrolled), 0) AS source_enrolled_emails,
+                CASE
+                    WHEN COALESCE((SELECT SUM(registration_rows) FROM registered), 0) = 0 THEN 0
+                    ELSE ROUND(
+                        COUNT(r.email) FILTER (WHERE e.email IS NOT NULL)::numeric
+                        / COALESCE((SELECT SUM(registration_rows) FROM registered), 0)::numeric
+                        * 100,
+                        1
+                    )
+                END AS enrollment_rate
             FROM registered r
             LEFT JOIN enrolled e
                 ON r.email = e.email

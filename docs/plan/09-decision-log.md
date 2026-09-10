@@ -206,3 +206,9 @@
 - **Ly do**: UEH LMS la nguon ben thu ba, khong nen tron truc tiep vao Moodle logs. Tach raw table giup sau nay co the thay nguon nap du lieu bang API, read-only database, CSV hoac job dbt ma khong doi UI dashboard.
 - **Metric v0**: `enrolled_registered_users / total_registered_users`, kem danh sach chi tiet cac user match email. Neu raw table chua co data, card hien `0` thay vi tu suy dien tu logs.
 - **Tac dong**: Khu vuc hoat dong trong yeu co them card thu 4 cho trang thai dang ky UEH LMS entrepreneurship, phuc vu nhu cau doi chieu cross-system cua manager.
+
+## ADR-040: Chuan Hoa Log Moodle Tieng Viet Sang Canonical Event
+- **Quyet dinh**: Parser Moodle log chap nhan ca header/event name tieng Anh va tieng Viet. Cac gia tri tieng Viet duoc map ve canonical event/component/context truoc khi ghi bronze.
+- **Ly do**: File log UEH LMS entrepreneurship export bang giao dien tieng Viet, trong khi pipeline ban dau duoc xay tu Moodle Sandbox giao dien tieng Anh. Neu khong canonical hoa o ingestion, silver/gold se bi tach logic theo tung ngon ngu va dashboard de dem sai.
+- **Enrollment UEH LMS**: Event `Người dùng đã ghi danh khóa học` trong course id `42246` duoc dung de upsert email vao `raw_ueh_lms_course_enrollments` voi `external_course_key = 'fmc3_entrepreneurship'`.
+- **Ket qua local**: File entrepreneurship moi co `18,133` dong, import khong loi, sinh `19` email enrollment nguon UEH LMS va `13` email match voi registrations.

@@ -269,3 +269,12 @@
 - **Metric moi**: `ueh_lms_entrepreneurship_enrollment_summary` tinh `enrolled_registered_users`, `total_registered_users`, `source_enrolled_emails`, va `enrollment_rate` bang cach join email UEH LMS voi `registrations`.
 - **Chi tiet moi**: Endpoint `/api/v1/moodle-logs/ueh-lms-entrepreneurship-enrollments-detail` tra danh sach user da match email de hien trong modal.
 - **Ghi chu hoc tap**: Day la mau raw landing table cho nguon third-party. Pipeline thuc te sau nay se upsert tu database UEH LMS vao raw, sau do dashboard chi doc summary da join theo email.
+
+## TASK-038: Import log tieng Viet cua khoa entrepreneurship
+- **Trang thai**: Hoan thanh local, cho seed Neon de cap nhat live.
+- **Muc tieu**: Doc file log `example/logs_Digital Entrepreneurship_20260910-1053.csv` co header/event name tieng Viet, chuyen ve schema Moodle log chuan va tu dong tao enrollment UEH LMS tu event ghi danh khoa hoc.
+- **File anh huong**: `src/app/services/moodle_log_service.py`, `src/app/core/database.py`, `tests/test_main.py`, `docs/plan/09-decision-log.md`.
+- **Mapping moi**: Header tieng Viet duoc map sang header chuan; event `Người dùng đã ghi danh khóa học` duoc map thanh `User enrolled in course`; event `Mô-đun khóa học đã xem`, SCORM va Quiz duoc map thanh cac learning event canonical.
+- **Ket qua local**: Import `18,133` dong, them `18,133` bronze events, khong loi parse, course id `42246`. Bang `raw_ueh_lms_course_enrollments` co `19` email, trong do `13` email match voi `107` registrations, ty le `12.1%`.
+- **Doi chieu live hien tai**: Render/Neon van co `4,176` bronze events va `0` enrollment UEH LMS cho den khi seed lai Neon tu local.
+- **Ghi chu hoc tap**: Day la vi du ve raw ingestion co schema drift/ngon ngu khac nhau. Bronze nen giu gia tri canonical de silver/gold khong phai xu ly nhieu ngon ngu trong tung dashboard query.
