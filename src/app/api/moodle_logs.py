@@ -649,7 +649,7 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
                     VALUES
                         (1, 'lms_guideline', 'UEH LMS Registration Guideline (FMC3)', 714, ARRAY[714]::INTEGER[]),
                         (2, 'pre_program_survey_page', 'Pre-Program Survey', 707, ARRAY[707]::INTEGER[]),
-                        (3, 'foundations_course', 'Foundations of Digital Entrepreneurship Course', 712, ARRAY[650, 651, 653, 654, 656, 657, 659, 660, 662, 663, 712]::INTEGER[])
+                        (3, 'foundations_course', 'Foundations of Digital Entrepreneurship Course', 712, ARRAY[714, 716]::INTEGER[])
                 ) AS t(display_order, spotlight_key, spotlight_label, moodle_course_module_id, tracked_module_ids)
             ),
             registered_total AS (
@@ -805,8 +805,7 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
                 SELECT *
                 FROM (
                     VALUES
-                        (650), (651), (653), (654), (656),
-                        (657), (659), (660), (662), (663)
+                        (714), (716)
                 ) AS t(moodle_course_module_id)
             ),
             registered AS (
@@ -824,7 +823,7 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
                     COUNT(*) FILTER (
                         WHERE fm.moodle_course_module_id IS NOT NULL
                           AND e.is_access_event = TRUE
-                    ) > 0 AS accessed_foundation_content
+                    ) > 0 AS accessed_foundation_submission
                 FROM registered u
                 LEFT JOIN silver_moodle_learning_events e
                     ON LOWER(TRIM(e.email)) = u.email
@@ -835,18 +834,18 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
             SELECT
                 COUNT(*) AS total_registered_users,
                 COUNT(*) FILTER (WHERE viewed_fmc3_lms_guideline = TRUE) AS fmc3_guideline_viewers,
-                COUNT(*) FILTER (WHERE accessed_foundation_content = TRUE) AS foundation_content_users,
+                COUNT(*) FILTER (WHERE accessed_foundation_submission = TRUE) AS foundation_submission_users,
                 COUNT(DISTINCT team_name_key) FILTER (
-                    WHERE accessed_foundation_content = TRUE
+                    WHERE accessed_foundation_submission = TRUE
                       AND team_name_key IS NOT NULL
                 ) AS foundation_active_teams,
                 COUNT(*) FILTER (
                     WHERE viewed_fmc3_lms_guideline = FALSE
-                      AND accessed_foundation_content = TRUE
+                      AND accessed_foundation_submission = TRUE
                 ) AS skipped_fmc3_guideline_but_accessed_content,
                 COUNT(*) FILTER (
                     WHERE viewed_fmc3_lms_guideline = TRUE
-                      AND accessed_foundation_content = FALSE
+                      AND accessed_foundation_submission = FALSE
                 ) AS viewed_fmc3_guideline_but_no_content_access
             FROM user_flags
             """

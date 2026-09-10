@@ -273,24 +273,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 help: 'Dấu hiệu người học mở page hướng dẫn đăng ký LMS của riêng khóa Foundations/FMC3.'
             },
             {
-                label: 'Đã vào tài liệu milestone FMC3',
-                value: summary.foundation_content_users,
-                help: 'Dấu hiệu người học đã truy cập các module milestone thuộc Foundations/FMC3.'
+                label: 'Đã vào Certificate Submission',
+                value: summary.foundation_submission_users,
+                help: 'Dấu hiệu người học đã truy cập activity nộp bài module 716 của Foundations/FMC3.'
             },
             {
                 label: 'Đội đã hoạt động trong FMC3',
                 value: summary.foundation_active_teams,
-                help: 'Số đội có ít nhất một thành viên truy cập tài liệu milestone FMC3.'
+                help: 'Số đội có ít nhất một thành viên đọc guideline hoặc vào Certificate Submission.'
             },
             {
-                label: 'Bỏ guideline FMC3 nhưng vẫn vào tài liệu',
+                label: 'Bỏ guideline FMC3 nhưng vẫn vào submission',
                 value: summary.skipped_fmc3_guideline_but_accessed_content,
-                help: 'Người học chưa mở guideline FMC3 nhưng đã truy cập tài liệu milestone.'
+                help: 'Người học chưa mở guideline FMC3 nhưng đã truy cập Certificate Submission.'
             },
             {
-                label: 'Đọc guideline FMC3 nhưng chưa vào tài liệu',
+                label: 'Đọc guideline FMC3 nhưng chưa vào submission',
                 value: summary.viewed_fmc3_guideline_but_no_content_access,
-                help: 'Người học đã mở guideline FMC3 nhưng chưa có log truy cập tài liệu milestone.'
+                help: 'Người học đã mở guideline FMC3 nhưng chưa có log truy cập Certificate Submission.'
             }
         ];
 

@@ -250,5 +250,13 @@
 - **Muc tieu**: Khong tron tin hieu survey dau vao voi tin hieu doc guideline/tai lieu cua khoa `Foundations of Digital Entrepreneurship Course`.
 - **File anh huong**: `src/app/api/moodle_logs.py`, `src/app/static/index.html`, `src/app/static/learning-dashboard.js`, `tests/test_main.py`, `docs/plan/09-decision-log.md`.
 - **Thay doi metric**: `pre_program_gate_summary` chi theo doi viec xem trang Pre-Program Survey va viec co di tiep sang noi dung khac hay khong.
-- **Metric moi**: `foundation_course_summary` theo doi `UEH LMS Registration Guideline (FMC3)` module `714`, so nguoi vao tai lieu milestone FMC3, so doi hoat dong, va nhom bo guideline FMC3 nhung van vao tai lieu milestone.
+- **Metric moi**: `foundation_course_summary` theo doi `UEH LMS Registration Guideline (FMC3)` module `714`, activity `Certificate Submission` module `716`, so doi hoat dong, va nhom bo guideline FMC3 nhung van vao submission.
 - **Ghi chu hoc tap**: Khi mot dashboard co nhieu business process gan nhau, can tach funnel theo dung ngu canh nghiep vu. Cung la chu "guideline" nhung guideline LMS cua FMC3 khong duoc tron vao Pre-Program Survey.
+
+## TASK-036: Siết scope FMC3 về module 714 và 716
+- **Trang thai**: Hoan thanh local.
+- **Muc tieu**: Giam so lieu phinh to do gom qua rong cac log H5P/milestone khong phai muc tieu FMC3 manager dang can theo doi.
+- **File anh huong**: `src/app/api/moodle_logs.py`, `src/app/static/index.html`, `src/app/static/learning-dashboard.js`, `tests/test_main.py`, `docs/plan/09-decision-log.md`.
+- **Quyet dinh metric**: Card `Foundations of Digital Entrepreneurship Course` va `foundation_course_summary` chi tinh scope `714` guideline va `716` Certificate Submission. Cac H5P milestone khong con duoc cong vao card nay.
+- **Ket qua local sau khi siết scope**: Scope `714/716` co `39` access events, `30` Course module viewed, `3` submission actions va `5` email co log.
+- **Ghi chu hoc tap**: Khi mot chi so bi lon bat thuong, can drill down theo `module_id`, `event_name`, `progress_signal_type` truoc khi sua UI. Loi o day la dinh nghia scope, khong phai loi Chart.js.

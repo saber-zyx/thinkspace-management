@@ -193,5 +193,10 @@
 ## ADR-037: Tach Funnel Survey Va Funnel FMC3
 - **Quyet dinh**: `Pre-Program Survey` va `Foundations of Digital Entrepreneurship Course` duoc tinh bang hai summary rieng. `pre_program_gate_summary` khong con chua chi so "bo guideline nhung van vao tai lieu". Chi so do chuyen sang `foundation_course_summary` va chi ap dung cho `UEH LMS Registration Guideline (FMC3)`.
 - **Ly do**: Page survey module `707` la cong survey dau vao, trong khi guideline module `714` la huong dan dang ky LMS cua rieng khoa FMC3. Neu dat chung, manager co the hieu nham nguoi hoc bo survey guideline, trong khi thuc te la bo guideline cua khoa FMC3.
-- **Dinh nghia FMC3 v0**: Tam thoi xem cac module milestone `650, 651, 653, 654, 656, 657, 659, 660, 662, 663` la tai lieu/noi dung chinh cua FMC3. Buoc toi uu sau can lay metadata cau truc course tu Moodle de map parent subsection chinh xac hon.
+- **Dinh nghia FMC3 v0**: Sau khi doi chieu voi muc tieu quan ly, FMC3 chi tinh module `714` la `UEH LMS Registration Guideline (FMC3)` va module `716` la `Certificate Submission`. Khong gom cac H5P milestone vao card FMC3 de tranh phinh to so lieu.
 - **Tac dong**: Dashboard hien rieng khoi `Pre-Program Survey` va khoi `Foundations of Digital Entrepreneurship Course`, giup nguoi quan ly doc insight dung ngu canh.
+
+## ADR-038: Siết Scope Foundations/FMC3 Chỉ Còn 714 Và 716
+- **Quyet dinh**: Card `Foundations of Digital Entrepreneurship Course` khong aggregate cac H5P/milestone nua. Metric chinh chi tinh hai module manager can theo doi: guideline `714` va submission `716`.
+- **Ly do**: Cac H5P sinh nhieu log `xAPI statement received`, lam `access_event_count` tang len hang tram va de bi hieu nham la luot xem khoa hoc. Scope moi bam sat business question: co doc guideline FMC3 khong va co vao/nop Certificate Submission khong.
+- **Tac dong**: So lieu FMC3 giam ve muc de giai thich: `39` access events trong scope `714/716`, gom `30` Course module viewed va `3` submission actions tren du lieu local hien tai.
