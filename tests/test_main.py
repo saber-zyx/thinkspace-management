@@ -10,6 +10,8 @@ from src.app.api.dashboard import get_dashboard_stats
 from src.app.models.schema import (
     Base,
     BronzeMoodleLogEvent,
+    MoodleLogIngestionRun,
+    MoodleLogIngestionState,
     MoodleParticipantEmailExclusion,
     RawUehLmsCourseEnrollment,
     RawMoodleParticipant,
@@ -17,6 +19,10 @@ from src.app.models.schema import (
 )
 from src.app.services.member_service import parse_member_list_from_csv
 from src.app.services.moodle_log_service import import_moodle_log_csv, parse_moodle_log_row
+from src.app.services.moodle_log_ingestion_service import (
+    get_live_ingestion_status,
+    run_live_moodle_log_ingestion_once,
+)
 from src.app.services.moodle_participant_service import (
     import_moodle_participants_csv,
     parse_moodle_participant_row,
@@ -125,6 +131,33 @@ class TestBasicSetup(unittest.TestCase):
         self.assertIn('@router.get("/team-activities-detail")', api_py)
         self.assertIn('@router.get("/individual-activities-detail")', api_py)
         self.assertIn("empty_activity_note", api_py)
+
+    def test_live_moodle_log_ingestion_contract_is_available(self):
+        api_py = Path("src/app/api/moodle_logs.py").read_text(encoding="utf-8")
+        schema_py = Path("src/app/models/schema.py").read_text(encoding="utf-8")
+        config_py = Path("src/app/core/config.py").read_text(encoding="utf-8")
+
+        self.assertIn('@router.get("/live-ingestion/status")', api_py)
+        self.assertIn('@router.post("/live-ingestion/run-once")', api_py)
+        self.assertIn("moodle_log_ingestion_state", schema_py)
+        self.assertIn("moodle_log_ingestion_runs", schema_py)
+        self.assertIn("moodle_log_source_database_url", config_py)
+
+    def test_live_moodle_log_ingestion_reports_missing_source_config(self):
+        engine = create_engine("sqlite:///:memory:")
+        TestingSession = sessionmaker(bind=engine)
+        Base.metadata.create_all(bind=engine)
+        db = TestingSession()
+
+        status = get_live_ingestion_status(db)
+        result = run_live_moodle_log_ingestion_once(db)
+
+        self.assertFalse(status["is_configured"])
+        self.assertEqual(result["run"]["status"], "not_configured")
+        self.assertEqual(result["state"]["status"], "not_configured")
+        self.assertEqual(db.query(MoodleLogIngestionState).count(), 1)
+        self.assertEqual(db.query(MoodleLogIngestionRun).count(), 1)
+        db.close()
 
     def test_learning_dashboard_frontend_is_available(self):
         index_html = Path("src/app/static/index.html").read_text(encoding="utf-8")

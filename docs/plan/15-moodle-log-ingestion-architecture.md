@@ -151,3 +151,58 @@ ORDER BY event_time;
 ```
 
 Sau đó đổi điều kiện sang `id > ...` nếu bảng log nguồn có id tăng dần. Đây là tư duy watermark, một trong những nền tảng quan trọng của pipeline incremental.
+
+## Triển Khai V0 Trong Ứng Dụng
+
+Ngày 2026-09-10, hệ thống đã thêm khung incremental ingestion đầu tiên.
+
+Các bảng vận hành:
+
+```text
+moodle_log_ingestion_state
+moodle_log_ingestion_runs
+```
+
+Ý nghĩa:
+
+- `moodle_log_ingestion_state`: lưu watermark hiện tại, ví dụ `last_moodle_log_id`.
+- `moodle_log_ingestion_runs`: lưu audit từng lần chạy, ví dụ chạy lúc nào, lấy bao nhiêu dòng, insert bao nhiêu dòng, trùng bao nhiêu dòng, lỗi bao nhiêu dòng.
+
+Các endpoint vận hành:
+
+```text
+GET /api/v1/moodle-logs/live-ingestion/status
+POST /api/v1/moodle-logs/live-ingestion/run-once
+```
+
+Biến môi trường cần có khi đấu nguồn thật:
+
+```text
+MOODLE_LOG_SOURCE_DATABASE_URL
+MOODLE_LOG_SOURCE_NAME
+MOODLE_LOG_SOURCE_TABLE
+MOODLE_LOG_SOURCE_USER_TABLE
+MOODLE_LOG_SOURCE_COURSE_TABLE
+MOODLE_LOG_SOURCE_POLL_COURSE_IDS
+MOODLE_LOG_SOURCE_BATCH_SIZE
+```
+
+Trong đó biến quan trọng nhất là `MOODLE_LOG_SOURCE_DATABASE_URL`. Đây phải là connection string read-only tới database/log store Moodle, không được ghi vào Git hoặc tài liệu.
+
+Luồng chạy v0:
+
+```text
+Đọc state hiện tại
+  -> lấy log có id > last_moodle_log_id từ source Moodle
+  -> chuyển thành bronze_moodle_log_events
+  -> chống trùng bằng event_hash
+  -> cập nhật run audit
+  -> cập nhật watermark
+  -> dashboard tự đọc silver/gold đã refresh qua view
+```
+
+Giới hạn hiện tại:
+
+- Adapter đầu tiên giả định nguồn log là PostgreSQL Moodle standard log store.
+- Nếu nguồn thật là MySQL hoặc Moodle plugin API, cần tạo thêm adapter nhưng vẫn dùng lại hai bảng state/run audit.
+- Tên activity từ database log có thể chưa đầy đủ bằng file CSV export nếu source không join thêm bảng module instance. Đây là phần tối ưu tiếp theo sau khi xác nhận được nguồn log thật.

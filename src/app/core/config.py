@@ -13,6 +13,13 @@ class Settings(BaseSettings):
     moodle_base_url: str = ""
     moodle_token: str = ""
     moodle_default_role_id: str = ""
+    moodle_log_source_database_url: str = ""
+    moodle_log_source_name: str = "moodle_standard_log"
+    moodle_log_source_table: str = "mdl_logstore_standard_log"
+    moodle_log_source_user_table: str = "mdl_user"
+    moodle_log_source_course_table: str = "mdl_course"
+    moodle_log_source_poll_course_ids: str = ""
+    moodle_log_source_batch_size: int = 1000
 
     # PostgreSQL Configuration
     postgres_user: str = ""

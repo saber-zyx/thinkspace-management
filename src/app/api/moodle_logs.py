@@ -4,6 +4,10 @@ from sqlalchemy.orm import Session
 
 from src.app.core.database import get_db
 from src.app.models.schema import BronzeMoodleLogEvent, RawMoodleLogFile
+from src.app.services.moodle_log_ingestion_service import (
+    get_live_ingestion_status,
+    run_live_moodle_log_ingestion_once,
+)
 from src.app.services.moodle_log_service import import_moodle_log_csv
 
 router = APIRouter(prefix="/api/v1/moodle-logs", tags=["Moodle Logs"])
@@ -50,6 +54,16 @@ def get_bronze_moodle_log_summary(db: Session = Depends(get_db)):
         "learning_events": learning_events,
         "latest_event_time": latest_event_time.isoformat() if latest_event_time else None,
     }
+
+
+@router.get("/live-ingestion/status")
+def get_moodle_log_live_ingestion_status(db: Session = Depends(get_db)):
+    return get_live_ingestion_status(db)
+
+
+@router.post("/live-ingestion/run-once")
+def run_moodle_log_live_ingestion_once(db: Session = Depends(get_db)):
+    return run_live_moodle_log_ingestion_once(db)
 
 
 @router.get("/silver-summary")

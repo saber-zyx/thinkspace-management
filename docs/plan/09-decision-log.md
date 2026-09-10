@@ -212,3 +212,9 @@
 - **Ly do**: File log UEH LMS entrepreneurship export bang giao dien tieng Viet, trong khi pipeline ban dau duoc xay tu Moodle Sandbox giao dien tieng Anh. Neu khong canonical hoa o ingestion, silver/gold se bi tach logic theo tung ngon ngu va dashboard de dem sai.
 - **Enrollment UEH LMS**: Event `Người dùng đã ghi danh khóa học` trong course id `42246` duoc dung de upsert email vao `raw_ueh_lms_course_enrollments` voi `external_course_key = 'fmc3_entrepreneurship'`.
 - **Ket qua local**: File entrepreneurship moi co `18,133` dong, import khong loi, sinh `19` email enrollment nguon UEH LMS va `13` email match voi registrations.
+
+## ADR-041: Live Log Ingestion Phai Co Watermark Va Run Audit
+- **Quyet dinh**: Truoc khi lap lich lay Moodle logs moi 30 phut hoac gan real-time, he thong phai co bang `moodle_log_ingestion_state` va `moodle_log_ingestion_runs`.
+- **Ly do**: Pipeline log khong duoc dua vao cam tinh "lay lai file moi nhat". Can biet lan truoc da doc den `moodle_log_id` nao, lan nay lay bao nhieu dong moi, bao nhieu dong bi trung, va neu loi thi loi o batch nao.
+- **Nguon v0**: Adapter dau tien doc tu Moodle standard log store hoac database log PostgreSQL read-only qua `MOODLE_LOG_SOURCE_DATABASE_URL`. Khong scrape HTML Live logs.
+- **Tac dong**: Dashboard van doc silver/gold nhu hien tai. Live ingestion chi la cach nap bronze lien tuc; cac metric dashboard khong can doi khi nguon chuyen tu CSV thu cong sang job incremental.

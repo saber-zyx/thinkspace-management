@@ -130,6 +130,41 @@ class RawUehLmsCourseEnrollment(Base):
     loaded_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class MoodleLogIngestionState(Base):
+    __tablename__ = "moodle_log_ingestion_state"
+    __table_args__ = (
+        UniqueConstraint("source_name", "course_id", name="uq_moodle_log_ingestion_state_source_course"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    source_name = Column(String(100), nullable=False, index=True)
+    course_id = Column(Integer, nullable=True, index=True)
+    last_moodle_log_id = Column(Integer, nullable=True)
+    last_event_time = Column(DateTime(timezone=True), nullable=True)
+    last_success_at = Column(DateTime(timezone=True), nullable=True)
+    status = Column(String(50), default="not_started", nullable=False, index=True)
+    error_message = Column(Text, nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class MoodleLogIngestionRun(Base):
+    __tablename__ = "moodle_log_ingestion_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    source_name = Column(String(100), nullable=False, index=True)
+    course_id = Column(Integer, nullable=True, index=True)
+    started_at = Column(DateTime(timezone=True), server_default=func.now())
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    status = Column(String(50), default="running", nullable=False, index=True)
+    rows_fetched = Column(Integer, default=0)
+    inserted_count = Column(Integer, default=0)
+    duplicate_count = Column(Integer, default=0)
+    failed_count = Column(Integer, default=0)
+    previous_watermark_id = Column(Integer, nullable=True)
+    new_watermark_id = Column(Integer, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+
 class BronzeMoodleLogEvent(Base):
     __tablename__ = "bronze_moodle_log_events"
     __table_args__ = (

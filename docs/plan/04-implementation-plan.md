@@ -278,3 +278,12 @@
 - **Ket qua local**: Import `18,133` dong, them `18,133` bronze events, khong loi parse, course id `42246`. Bang `raw_ueh_lms_course_enrollments` co `19` email, trong do `13` email match voi `107` registrations, ty le `12.1%`.
 - **Doi chieu live hien tai**: Render/Neon van co `4,176` bronze events va `0` enrollment UEH LMS cho den khi seed lai Neon tu local.
 - **Ghi chu hoc tap**: Day la vi du ve raw ingestion co schema drift/ngon ngu khac nhau. Bronze nen giu gia tri canonical de silver/gold khong phai xu ly nhieu ngon ngu trong tung dashboard query.
+
+## TASK-039: Tao khung incremental live ingestion cho Moodle logs
+- **Trang thai**: Hoan thanh khung v0, cho dau noi nguon log Moodle that.
+- **Muc tieu**: Tao state va run audit cho pipeline lay Moodle logs lien tuc, de moi lan chay chi lay log moi hon watermark thay vi nap lai toan bo.
+- **File anh huong**: `src/app/models/schema.py`, `src/app/core/config.py`, `src/app/services/moodle_log_ingestion_service.py`, `src/app/api/moodle_logs.py`, `scripts/seed-neon-demo.ps1`, `tests/test_main.py`, `docs/plan/09-decision-log.md`, `docs/plan/15-moodle-log-ingestion-architecture.md`.
+- **Bang moi**: `moodle_log_ingestion_state` luu `last_moodle_log_id`, `last_event_time`, `last_success_at`, `status`; `moodle_log_ingestion_runs` luu tung lan chay, so dong lay ve, so dong insert/trung/loi va watermark truoc/sau.
+- **API moi**: `GET /api/v1/moodle-logs/live-ingestion/status` de xem trang thai pipeline; `POST /api/v1/moodle-logs/live-ingestion/run-once` de chay mot batch incremental.
+- **Nguon v0**: Ho tro adapter doc PostgreSQL Moodle standard log store thong qua bien moi truong `MOODLE_LOG_SOURCE_DATABASE_URL`. Khi chua cau hinh nguon, endpoint tra `not_configured` thay vi gia lap thanh cong.
+- **Ghi chu hoc tap**: Watermark la cot dung de nho "da xu ly den dau". Trong pipeline log, watermark tot nhat la `moodle_log_id` tang dan; neu khong co id on dinh moi dung den timestamp.

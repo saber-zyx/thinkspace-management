@@ -17,6 +17,8 @@ $Tables = @(
     "public.raw_moodle_participants",
     "public.raw_ueh_lms_course_enrollments",
     "public.bronze_moodle_log_events",
+    "public.moodle_log_ingestion_state",
+    "public.moodle_log_ingestion_runs",
     "public.moodle_log_user_exclusions",
     "public.moodle_participant_email_exclusions"
 )
@@ -158,7 +160,7 @@ Invoke-CheckedDocker @(
     "psql",
     $TargetDatabaseUrl,
     "-c",
-    "SELECT 'registrations' AS table_name, COUNT(*) AS row_count FROM registrations UNION ALL SELECT 'raw_moodle_participants', COUNT(*) FROM raw_moodle_participants UNION ALL SELECT 'bronze_moodle_log_events', COUNT(*) FROM bronze_moodle_log_events ORDER BY table_name;"
+    "SELECT 'registrations' AS table_name, COUNT(*) AS row_count FROM registrations UNION ALL SELECT 'raw_moodle_participants', COUNT(*) FROM raw_moodle_participants UNION ALL SELECT 'bronze_moodle_log_events', COUNT(*) FROM bronze_moodle_log_events UNION ALL SELECT 'moodle_log_ingestion_state', COUNT(*) FROM moodle_log_ingestion_state UNION ALL SELECT 'moodle_log_ingestion_runs', COUNT(*) FROM moodle_log_ingestion_runs ORDER BY table_name;"
 )
 
 Write-Host "Hoan thanh seed demo Neon. Hay mo lai app Render va bam Ctrl + F5 de kiem tra dashboard."
