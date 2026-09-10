@@ -200,3 +200,9 @@
 - **Quyet dinh**: Card `Foundations of Digital Entrepreneurship Course` khong aggregate cac H5P/milestone nua. Metric chinh chi tinh hai module manager can theo doi: guideline `714` va submission `716`.
 - **Ly do**: Cac H5P sinh nhieu log `xAPI statement received`, lam `access_event_count` tang len hang tram va de bi hieu nham la luot xem khoa hoc. Scope moi bam sat business question: co doc guideline FMC3 khong va co vao/nop Certificate Submission khong.
 - **Tac dong**: So lieu FMC3 giam ve muc de giai thich: `39` access events trong scope `714/716`, gom `30` Course module viewed va `3` submission actions tren du lieu local hien tai.
+
+## ADR-039: Theo Doi Enrollment UEH LMS Bang Raw Landing Table
+- **Quyet dinh**: Them bang `raw_ueh_lms_course_enrollments` lam diem nhan du lieu dang ky khoa entrepreneurship tu UEH LMS. Dashboard join bang nay voi `registrations` bang email de tinh ty le user Sandbox da dang ky khoa.
+- **Ly do**: UEH LMS la nguon ben thu ba, khong nen tron truc tiep vao Moodle logs. Tach raw table giup sau nay co the thay nguon nap du lieu bang API, read-only database, CSV hoac job dbt ma khong doi UI dashboard.
+- **Metric v0**: `enrolled_registered_users / total_registered_users`, kem danh sach chi tiet cac user match email. Neu raw table chua co data, card hien `0` thay vi tu suy dien tu logs.
+- **Tac dong**: Khu vuc hoat dong trong yeu co them card thu 4 cho trang thai dang ky UEH LMS entrepreneurship, phuc vu nhu cau doi chieu cross-system cua manager.

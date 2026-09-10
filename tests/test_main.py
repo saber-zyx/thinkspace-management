@@ -105,6 +105,7 @@ class TestBasicSetup(unittest.TestCase):
 
     def test_learning_dashboard_overview_endpoint_is_available(self):
         api_py = Path("src/app/api/moodle_logs.py").read_text(encoding="utf-8")
+        schema_py = Path("src/app/models/schema.py").read_text(encoding="utf-8")
 
         self.assertIn('@router.get("/learning-dashboard-overview")', api_py)
         self.assertIn("FROM gold_registered_user_learning_summary", api_py)
@@ -115,6 +116,9 @@ class TestBasicSetup(unittest.TestCase):
         self.assertIn("key_activity_spotlights", api_py)
         self.assertIn("pre_program_gate_summary", api_py)
         self.assertIn("foundation_course_summary", api_py)
+        self.assertIn("ueh_lms_entrepreneurship_enrollment_summary", api_py)
+        self.assertIn('@router.get("/ueh-lms-entrepreneurship-enrollments-detail")', api_py)
+        self.assertIn("raw_ueh_lms_course_enrollments", schema_py)
         self.assertIn("total_moodle_log_rows", api_py)
         self.assertNotIn("'pre_program_survey_activity'", api_py)
         self.assertIn('@router.get("/team-activities-detail")', api_py)
@@ -127,13 +131,15 @@ class TestBasicSetup(unittest.TestCase):
 
         self.assertIn('data-target="learningDashboardView"', index_html)
         self.assertIn('id="learningDashboardView"', index_html)
-        self.assertIn('learning-dashboard.js?v=11', index_html)
-        self.assertIn('styles.css?v=8', index_html)
+        self.assertIn('learning-dashboard.js?v=12', index_html)
+        self.assertIn('styles.css?v=9', index_html)
         self.assertIn('/api/v1/moodle-logs/learning-dashboard-overview', learning_js)
         self.assertIn('learningDailyInteractionChart', learning_js)
         self.assertIn('renderKeyActivitySpotlights', learning_js)
         self.assertIn('renderPreProgramGateSummary', learning_js)
         self.assertIn('renderFoundationCourseSummary', learning_js)
+        self.assertIn('renderUehLmsEnrollmentSpotlight', learning_js)
+        self.assertIn('openUehLmsEnrollmentDetail', learning_js)
         self.assertIn('foundation_submission_users', learning_js)
         self.assertIn('log hệ thống', learning_js)
         self.assertIn('/api/v1/moodle-logs/gold-team-summary', learning_js)

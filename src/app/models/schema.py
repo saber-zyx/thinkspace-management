@@ -108,6 +108,28 @@ class MoodleLogUserExclusion(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class RawUehLmsCourseEnrollment(Base):
+    __tablename__ = "raw_ueh_lms_course_enrollments"
+    __table_args__ = (
+        UniqueConstraint(
+            "external_course_key",
+            "email",
+            name="uq_raw_ueh_lms_course_enrollments_course_email",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    source_system = Column(String(100), default="ueh_lms", nullable=False)
+    external_course_key = Column(String(100), default="fmc3_entrepreneurship", nullable=False, index=True)
+    external_course_name = Column(String(255), nullable=True)
+    email_raw = Column(String(255), nullable=True)
+    email = Column(String(255), nullable=False, index=True)
+    full_name_raw = Column(String(255), nullable=True)
+    enrollment_status = Column(String(50), default="enrolled", nullable=False, index=True)
+    enrolled_at = Column(DateTime(timezone=True), nullable=True)
+    loaded_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class BronzeMoodleLogEvent(Base):
     __tablename__ = "bronze_moodle_log_events"
     __table_args__ = (

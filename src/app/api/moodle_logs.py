@@ -852,6 +852,43 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
         )
     ).mappings().one()
 
+    ueh_lms_entrepreneurship_enrollment_summary = db.execute(
+        text(
+            """
+            WITH registered AS (
+                SELECT
+                    LOWER(TRIM(email)) AS email,
+                    COUNT(*) AS registration_rows
+                FROM registrations
+                WHERE NULLIF(TRIM(email), '') IS NOT NULL
+                GROUP BY LOWER(TRIM(email))
+            ),
+            enrolled AS (
+                SELECT DISTINCT LOWER(TRIM(email)) AS email
+                FROM raw_ueh_lms_course_enrollments
+                WHERE external_course_key = 'fmc3_entrepreneurship'
+                  AND enrollment_status IN ('enrolled', 'active')
+                  AND NULLIF(TRIM(email), '') IS NOT NULL
+            )
+            SELECT
+                COALESCE((SELECT SUM(registration_rows) FROM registered), 0) AS total_registered_users,
+                COUNT(r.email) FILTER (WHERE e.email IS NOT NULL) AS enrolled_registered_users,
+                COALESCE((SELECT COUNT(*) FROM enrolled), 0) AS source_enrolled_emails,
+                ROUND(
+                    CASE
+                        WHEN COALESCE((SELECT SUM(registration_rows) FROM registered), 0) = 0 THEN 0
+                        ELSE COUNT(r.email) FILTER (WHERE e.email IS NOT NULL)::NUMERIC * 100
+                            / COALESCE((SELECT SUM(registration_rows) FROM registered), 0)
+                    END,
+                    1
+                ) AS enrollment_rate
+            FROM registered r
+            LEFT JOIN enrolled e
+                ON r.email = e.email
+            """
+        )
+    ).mappings().one()
+
     activity_type_summary = db.execute(
         text(
             """
@@ -1039,6 +1076,12 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
         ],
         "pre_program_gate_summary": dict(pre_program_gate_summary),
         "foundation_course_summary": dict(foundation_course_summary),
+        "ueh_lms_entrepreneurship_enrollment_summary": {
+            **dict(ueh_lms_entrepreneurship_enrollment_summary),
+            "enrollment_rate": float(
+                ueh_lms_entrepreneurship_enrollment_summary["enrollment_rate"] or 0
+            ),
+        },
         "activity_type_summary": [dict(row) for row in activity_type_summary],
         "top_viewed_activities": [
             {
@@ -1078,6 +1121,92 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
                 else None,
             }
             for row in submitted_teams
+        ],
+    }
+
+
+@router.get("/ueh-lms-entrepreneurship-enrollments-detail")
+def get_ueh_lms_entrepreneurship_enrollments_detail(
+    db: Session = Depends(get_db),
+):
+    summary = db.execute(
+        text(
+            """
+            WITH registered AS (
+                SELECT
+                    LOWER(TRIM(email)) AS email,
+                    COUNT(*) AS registration_rows
+                FROM registrations
+                WHERE NULLIF(TRIM(email), '') IS NOT NULL
+                GROUP BY LOWER(TRIM(email))
+            ),
+            enrolled AS (
+                SELECT DISTINCT LOWER(TRIM(email)) AS email
+                FROM raw_ueh_lms_course_enrollments
+                WHERE external_course_key = 'fmc3_entrepreneurship'
+                  AND enrollment_status IN ('enrolled', 'active')
+                  AND NULLIF(TRIM(email), '') IS NOT NULL
+            )
+            SELECT
+                COALESCE((SELECT SUM(registration_rows) FROM registered), 0) AS total_registered_users,
+                COUNT(r.email) FILTER (WHERE e.email IS NOT NULL) AS enrolled_registered_users,
+                COALESCE((SELECT COUNT(*) FROM enrolled), 0) AS source_enrolled_emails
+            FROM registered r
+            LEFT JOIN enrolled e
+                ON r.email = e.email
+            """
+        )
+    ).mappings().one()
+
+    users = db.execute(
+        text(
+            """
+            WITH latest_enrollment AS (
+                SELECT *
+                FROM (
+                    SELECT
+                        e.*,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY LOWER(TRIM(e.email))
+                            ORDER BY e.loaded_at DESC, e.id DESC
+                        ) AS enrollment_rank
+                    FROM raw_ueh_lms_course_enrollments e
+                    WHERE e.external_course_key = 'fmc3_entrepreneurship'
+                      AND e.enrollment_status IN ('enrolled', 'active')
+                      AND NULLIF(TRIM(e.email), '') IS NOT NULL
+                ) ranked
+                WHERE enrollment_rank = 1
+            )
+            SELECT
+                r.full_name,
+                LOWER(TRIM(r.email)) AS email,
+                r.role,
+                NULLIF(TRIM(r.team_name), '') AS team_name,
+                e.external_course_name,
+                e.enrollment_status,
+                e.enrolled_at,
+                e.loaded_at
+            FROM registrations r
+            JOIN latest_enrollment e
+                ON LOWER(TRIM(r.email)) = LOWER(TRIM(e.email))
+            WHERE NULLIF(TRIM(r.email), '') IS NOT NULL
+            ORDER BY
+                NULLIF(TRIM(r.team_name), '') NULLS LAST,
+                r.full_name,
+                LOWER(TRIM(r.email))
+            """
+        )
+    ).mappings().all()
+
+    return {
+        "summary": dict(summary),
+        "users": [
+            {
+                **dict(row),
+                "enrolled_at": row["enrolled_at"].isoformat() if row["enrolled_at"] else None,
+                "loaded_at": row["loaded_at"].isoformat() if row["loaded_at"] else None,
+            }
+            for row in users
         ],
     }
 

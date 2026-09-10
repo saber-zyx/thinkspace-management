@@ -15,6 +15,7 @@ $Tables = @(
     "public.raw_moodle_log_files",
     "public.raw_moodle_participant_files",
     "public.raw_moodle_participants",
+    "public.raw_ueh_lms_course_enrollments",
     "public.bronze_moodle_log_events",
     "public.moodle_log_user_exclusions",
     "public.moodle_participant_email_exclusions"

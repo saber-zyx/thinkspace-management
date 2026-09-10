@@ -72,6 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
             overviewLoaded = true;
             renderOverviewKpis(data);
             renderKeyActivitySpotlights(data);
+            renderUehLmsEnrollmentSpotlight(data);
             renderPreProgramGateSummary(data);
             renderFoundationCourseSummary(data);
             renderOverviewCharts(data);
@@ -227,6 +228,32 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             }).join('')
             : '<p class="empty-state">Chưa có dữ liệu hoạt động trọng yếu.</p>';
+    }
+
+    function renderUehLmsEnrollmentSpotlight(data) {
+        const container = document.getElementById('keyActivitySpotlights');
+        if (!container) return;
+
+        const summary = data.ueh_lms_entrepreneurship_enrollment_summary || {};
+        const enrolledUsers = numberValue(summary.enrolled_registered_users);
+        const totalUsers = numberValue(summary.total_registered_users);
+        const enrollmentRate = numberValue(summary.enrollment_rate);
+        const card = document.createElement('div');
+        card.className = 'spotlight-card spotlight-card-action';
+        card.innerHTML = `
+            <div class="spotlight-label">ĐĂNG KÝ UEH LMS ENTREPRENEURSHIP</div>
+            <div class="spotlight-title">Đã đăng ký khóa entrepreneurship</div>
+            <div class="spotlight-metrics">
+                <span><strong>${enrolledUsers}</strong> user</span>
+                <span><strong>${totalUsers}</strong> đăng ký</span>
+                <span><strong>${enrollmentRate.toFixed(1)}%</strong> hoàn tất</span>
+            </div>
+            <div class="spotlight-meta">${enrolledUsers}/${totalUsers} user đã đăng ký trên UEH LMS</div>
+            <button class="spotlight-detail-btn" type="button">Chi tiết</button>
+        `;
+
+        card.querySelector('.spotlight-detail-btn')?.addEventListener('click', openUehLmsEnrollmentDetail);
+        container.appendChild(card);
     }
 
     function renderPreProgramGateSummary(data) {
@@ -443,6 +470,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function openUehLmsEnrollmentDetail() {
+        openModal('User đã đăng ký khóa entrepreneurship');
+        try {
+            const data = await fetchJson('/api/v1/moodle-logs/ueh-lms-entrepreneurship-enrollments-detail');
+            renderModalUehLmsEnrollments(data);
+        } catch (error) {
+            console.error('Lỗi tải chi tiết đăng ký UEH LMS', error);
+            setModalError('Không tải được danh sách user đã đăng ký khóa entrepreneurship.');
+        }
+    }
+
     function renderModalTeamActivities(data) {
         const teamName = data.team?.team_name || data.team_name_key || 'Đội';
         modalTitle.textContent = `Đội: ${teamName}`;
@@ -458,6 +496,44 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderModalIndividualActivities(data) {
         modalTitle.textContent = `Cá nhân: ${data.full_name || data.email || 'Không có tên'}`;
         modalContent.innerHTML = renderMemberActivityBlock(data);
+    }
+
+    function renderModalUehLmsEnrollments(data) {
+        const summary = data.summary || {};
+        const users = data.users || [];
+        const total = numberValue(summary.total_registered_users);
+        const matched = numberValue(summary.enrolled_registered_users);
+        modalContent.innerHTML = `
+            <div class="modal-summary-strip">
+                <span><strong>${matched}</strong> user match email đăng ký</span>
+                <span><strong>${total}</strong> user trong database hiện tại</span>
+                <span><strong>${numberValue(summary.source_enrolled_emails)}</strong> email nguồn UEH LMS</span>
+            </div>
+            ${users.length ? `
+                <div class="data-table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Họ tên</th>
+                                <th>Email</th>
+                                <th>Đội</th>
+                                <th>Trạng thái UEH LMS</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${users.map(user => `
+                                <tr>
+                                    <td>${escapeHtml(user.full_name || 'Không có tên')}</td>
+                                    <td>${escapeHtml(user.email || '')}</td>
+                                    <td>${escapeHtml(user.team_name || 'Cá nhân / chưa có đội')}</td>
+                                    <td>${escapeHtml(user.enrollment_status || 'enrolled')}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            ` : '<div class="empty-state">Chưa có email UEH LMS nào match với danh sách đăng ký hiện tại. Khi pipeline UEH LMS đổ dữ liệu vào bảng raw, danh sách này sẽ tự hiện.</div>'}
+        `;
     }
 
     function renderMemberActivityBlock(member) {

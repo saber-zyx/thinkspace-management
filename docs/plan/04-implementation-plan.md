@@ -260,3 +260,12 @@
 - **Quyet dinh metric**: Card `Foundations of Digital Entrepreneurship Course` va `foundation_course_summary` chi tinh scope `714` guideline va `716` Certificate Submission. Cac H5P milestone khong con duoc cong vao card nay.
 - **Ket qua local sau khi siết scope**: Scope `714/716` co `39` access events, `30` Course module viewed, `3` submission actions va `5` email co log.
 - **Ghi chu hoc tap**: Khi mot chi so bi lon bat thuong, can drill down theo `module_id`, `event_name`, `progress_signal_type` truoc khi sua UI. Loi o day la dinh nghia scope, khong phai loi Chart.js.
+
+## TASK-037: Them o theo doi dang ky khoa entrepreneurship tren UEH LMS
+- **Trang thai**: Hoan thanh local.
+- **Muc tieu**: Bo sung o thu 4 trong khu vuc hoat dong trong yeu de theo doi user da dang ky khoa entrepreneurship tren he thong UEH LMS ben thu ba.
+- **File anh huong**: `src/app/models/schema.py`, `src/app/api/moodle_logs.py`, `src/app/static/index.html`, `src/app/static/learning-dashboard.js`, `src/app/static/styles.css`, `scripts/seed-neon-demo.ps1`, `tests/test_main.py`, `docs/plan/09-decision-log.md`.
+- **Bang raw moi**: `raw_ueh_lms_course_enrollments` luu email enrollment tu UEH LMS voi `external_course_key = 'fmc3_entrepreneurship'`.
+- **Metric moi**: `ueh_lms_entrepreneurship_enrollment_summary` tinh `enrolled_registered_users`, `total_registered_users`, `source_enrolled_emails`, va `enrollment_rate` bang cach join email UEH LMS voi `registrations`.
+- **Chi tiet moi**: Endpoint `/api/v1/moodle-logs/ueh-lms-entrepreneurship-enrollments-detail` tra danh sach user da match email de hien trong modal.
+- **Ghi chu hoc tap**: Day la mau raw landing table cho nguon third-party. Pipeline thuc te sau nay se upsert tu database UEH LMS vao raw, sau do dashboard chi doc summary da join theo email.
