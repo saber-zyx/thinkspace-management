@@ -177,3 +177,9 @@
 - **Quyet dinh**: App FastAPI dung SQLAlchemy event `connect` de chay `SET search_path TO public` sau khi mo ket noi PostgreSQL.
 - **Ly do**: Sau khi reset schema tren Neon, ket noi co the bao loi `no schema has been selected to create in` khi SQLAlchemy chay `CREATE TABLE`. Tuy nhien Neon pooler khong chap nhan startup parameter `options=search_path`, nen khong duoc dua `search_path` vao URL hoac `connect_args`. Cach dung event sau ket noi phu hop hon voi pooler.
 - **Ket qua kiem chung**: Script seed Neon da chay thanh cong; Neon co `4176` bronze events, `113` Moodle participants va `101` registrations. API Render da doc du lieu moi tu Neon.
+
+## ADR-035: Tach Tin Hieu Guideline, Survey Va Hoc Sau Cong
+- **Quyet dinh**: Learning Dashboard Overview theo doi rieng `UEH LMS REGISTRATION GUIDELINE`, trang `Pre-Program Survey`, activity survey, subsection `Foundations of Digital Entrepreneurship Course`, va nhom nguoi da vao noi dung sau cong survey.
+- **Ly do**: Manager can biet nguoi hoc co doc huong dan LMS va co di qua survey hay khong. Khong duoc xem `Course module viewed` la da hoan thanh survey; day chi la tin hieu da xem/mo activity. Tin hieu hoan thanh survey can duoc xac dinh rieng khi log Moodle co event submit/complete phu hop.
+- **Quy tac dem v0**: Cac chi so spotlight chi dem user co trong `gold_registered_user_learning_summary`. Cac log khong map duoc email dang ky khong duoc tinh vao ty le thí sinh.
+- **Ket qua local hien tai**: Guideline LMS co `3` nguoi dang ky da xem; trang survey co `26` nguoi xem; activity survey module `709` chua co registered user nao map duoc; `35` nguoi da truy cap noi dung khac sau cong survey.

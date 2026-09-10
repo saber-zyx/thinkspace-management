@@ -227,3 +227,12 @@
 - **So lieu local sau import**: `bronze_moodle_log_events = 4176`, `bronze learning events = 2068`, `silver_moodle_learning_events = 2068`, `learning users = 55`, `learning emails = 55`, `learning teams = 17`, `latest_event_time = 2026-09-10 06:40:15+00`.
 - **So lieu dashboard registered local**: `total_registered_users = 101`, `accessed_users = 49`, `not_started_users = 52`, `submitted_users = 1`, `total_teams = 22`, `active_teams = 17`, `not_started_teams = 5`, `total_individuals = 18`, `accessed_individuals = 12`.
 - **Ghi chu van hanh**: Render hien van doc du lieu Neon cu cho den khi chay lai `scripts/seed-neon-demo.ps1 -ResetTarget` voi `TARGET_DATABASE_URL`. Connection string Neon khong duoc ghi vao chat, docs hoac Git.
+
+## TASK-033: Them overview insight cho guideline, survey va interaction theo ngay
+- **Trang thai**: Hoan thanh local.
+- **Muc tieu**: Bo sung cac insight quan trong cho manager trong Learning Dashboard Overview: nhịp tương tác theo ngày, spotlight cho `UEH LMS REGISTRATION GUIDELINE`, `Pre-Program Survey`, và `Foundations of Digital Entrepreneurship Course`.
+- **File anh huong**: `src/app/api/moodle_logs.py`, `src/app/static/index.html`, `src/app/static/learning-dashboard.js`, `src/app/static/styles.css`, `tests/test_main.py`.
+- **Metric moi**: `daily_interactions` gom tong interaction, luot xem, thao tac nop bai, lan da nop bai, so nguoi hoc va so doi hoat dong theo tung ngay.
+- **Spotlight moi**: `key_activity_spotlights` theo doi module `714` guideline LMS, module `707` trang survey, module `709` activity survey, module `712` Foundations subsection.
+- **Pheu survey moi**: `pre_program_gate_summary` theo doi so nguoi da doc guideline, da xem survey page, da mo survey activity, da vao kho tai lieu sau survey, bo qua guideline nhung van vao tai lieu, va xem survey nhung chua vao tai lieu.
+- **Ghi chu hoc tap**: Day la vi du ve dashboard metric theo business question. Truoc khi ve bieu do, can chot cau hoi manager muon tra loi va gan moi chi so voi grain ro rang: ngay, user da dang ky, team, hay Moodle activity.

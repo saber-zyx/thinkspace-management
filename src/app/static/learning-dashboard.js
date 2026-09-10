@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let learningStatusChart = null;
     let learningTeamStatusChart = null;
     let learningActivityTypeChart = null;
+    let learningDailyInteractionChart = null;
 
     if (learningNav) {
         learningNav.addEventListener('click', () => {
@@ -70,6 +71,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await fetchJson('/api/v1/moodle-logs/learning-dashboard-overview');
             overviewLoaded = true;
             renderOverviewKpis(data);
+            renderKeyActivitySpotlights(data);
+            renderPreProgramGateSummary(data);
             renderOverviewCharts(data);
             renderActivityLists(data);
             renderSubmissionTables(data);
@@ -131,6 +134,33 @@ document.addEventListener('DOMContentLoaded', () => {
         const registered = data.registered_summary || {};
         const teams = data.team_summary || {};
         const activityTypes = data.activity_type_summary || [];
+        const dailyInteractions = data.daily_interactions || [];
+
+        learningDailyInteractionChart = renderLineChart({
+            currentInstance: learningDailyInteractionChart,
+            canvasId: 'learningDailyInteractionChart',
+            labels: dailyInteractions.map(item => formatDateLabel(item.event_date)),
+            datasets: [
+                {
+                    label: 'Tổng tương tác',
+                    data: dailyInteractions.map(item => numberValue(item.total_interactions)),
+                    borderColor: '#e53217',
+                    backgroundColor: 'rgba(229, 50, 23, 0.12)'
+                },
+                {
+                    label: 'Lượt xem',
+                    data: dailyInteractions.map(item => numberValue(item.access_interactions)),
+                    borderColor: '#254385',
+                    backgroundColor: 'rgba(37, 67, 133, 0.1)'
+                },
+                {
+                    label: 'Người học',
+                    data: dailyInteractions.map(item => numberValue(item.active_users)),
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)'
+                }
+            ]
+        });
 
         learningStatusChart = renderDoughnutChart({
             currentInstance: learningStatusChart,
@@ -163,6 +193,76 @@ document.addEventListener('DOMContentLoaded', () => {
             values: activityTypes.map(item => numberValue(item.unique_viewers)),
             label: 'Người học đã xem'
         });
+    }
+
+    function renderKeyActivitySpotlights(data) {
+        const container = document.getElementById('keyActivitySpotlights');
+        if (!container) return;
+
+        const rows = data.key_activity_spotlights || [];
+        container.innerHTML = rows.length
+            ? rows.map(row => `
+                <div class="spotlight-card">
+                    <div class="spotlight-label">${escapeHtml(row.spotlight_label || row.activity_name || 'Hoạt động')}</div>
+                    <div class="spotlight-title">${escapeHtml(row.activity_name || row.spotlight_label || 'Không xác định')}</div>
+                    <div class="spotlight-metrics">
+                        <span><strong>${numberValue(row.unique_viewers)}</strong> người xem</span>
+                        <span><strong>${numberValue(row.access_event_count)}</strong> lượt xem</span>
+                        <span><strong>${numberValue(row.viewer_rate).toFixed(1)}%</strong> thí sinh</span>
+                    </div>
+                    <div class="spotlight-meta">
+                        ${escapeHtml(activityTypeLabel(row.activity_type))} · module ${escapeHtml(row.moodle_course_module_id || 'N/A')} · lần cuối ${escapeHtml(formatDateTime(row.last_interaction_at))}
+                    </div>
+                </div>
+            `).join('')
+            : '<p class="empty-state">Chưa có dữ liệu hoạt động trọng yếu.</p>';
+    }
+
+    function renderPreProgramGateSummary(data) {
+        const container = document.getElementById('preProgramGateSummary');
+        if (!container) return;
+
+        const summary = data.pre_program_gate_summary || {};
+        const rows = [
+            {
+                label: 'Đã đọc UEH LMS guideline',
+                value: summary.guideline_viewers,
+                help: 'Dấu hiệu người học có xem hướng dẫn đăng ký LMS.'
+            },
+            {
+                label: 'Đã xem trang survey',
+                value: summary.survey_page_viewers,
+                help: 'Dấu hiệu người học mở trang hướng dẫn Pre-Program Survey.'
+            },
+            {
+                label: 'Đã mở activity survey',
+                value: summary.survey_activity_users,
+                help: 'Dấu hiệu người học chạm vào activity survey trên Moodle.'
+            },
+            {
+                label: 'Đã vào kho tài liệu sau survey',
+                value: summary.post_gate_content_users,
+                help: 'Dấu hiệu người học đã truy cập nội dung khác sau cổng survey.'
+            },
+            {
+                label: 'Bỏ guideline nhưng vẫn vào tài liệu',
+                value: summary.skipped_guideline_but_accessed_content,
+                help: 'Nhóm này có thể đã đi thẳng vào tài liệu, cần kiểm tra nếu guideline là bắt buộc.'
+            },
+            {
+                label: 'Xem survey nhưng chưa vào tài liệu',
+                value: summary.viewed_survey_but_no_content_access,
+                help: 'Nhóm có thể đang bị kẹt ở bước survey hoặc chưa quay lại học.'
+            }
+        ];
+
+        container.innerHTML = rows.map(row => `
+            <div class="gate-summary-item">
+                <strong>${numberValue(row.value)}</strong>
+                <span>${escapeHtml(row.label)}</span>
+                <small>${escapeHtml(row.help)}</small>
+            </div>
+        `).join('');
     }
 
     function renderActivityLists(data) {
@@ -447,6 +547,54 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function renderLineChart({ currentInstance, canvasId, labels, datasets }) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas || typeof Chart === 'undefined') return currentInstance;
+        if (currentInstance) currentInstance.destroy();
+
+        return new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels,
+                datasets: datasets.map(dataset => ({
+                    ...dataset,
+                    borderWidth: 2.5,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    fill: false,
+                    tension: 0.28
+                }))
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                layout: { padding: { top: 8, right: 16, bottom: 2, left: 2 } },
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { boxWidth: 14, padding: 16 }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(37, 67, 133, 0.08)' },
+                        ticks: {
+                            color: '#64748b',
+                            maxRotation: 45,
+                            minRotation: 0
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: { precision: 0 },
+                        grid: { color: 'rgba(37, 67, 133, 0.12)' }
+                    }
+                }
+            }
+        });
+    }
+
     function renderDataList({ containerId, rows, title, meta, value }) {
         const container = document.getElementById(containerId);
         if (!container) return;
@@ -488,6 +636,16 @@ document.addEventListener('DOMContentLoaded', () => {
             year: 'numeric',
             hour: '2-digit',
             minute: '2-digit'
+        });
+    }
+
+    function formatDateLabel(value) {
+        if (!value) return '';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return value;
+        return date.toLocaleDateString('vi-VN', {
+            day: '2-digit',
+            month: '2-digit'
         });
     }
 

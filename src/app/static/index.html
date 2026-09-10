@@ -7,7 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <link rel="stylesheet" href="styles.css?v=6">
+    <link rel="stylesheet" href="styles.css?v=7">
 </head>
 <body>
     <div class="background-shapes">
@@ -126,6 +126,33 @@
                             <span>Đã nộp bài</span>
                             <strong id="learningSubmittedUsers">0</strong>
                             <small id="learningSubmittedTeams">0 đội đã nộp bài</small>
+                        </div>
+                    </div>
+
+                    <div class="learning-card glass-panel">
+                        <div class="section-heading-row">
+                            <h3>Hoạt động trọng yếu cần theo dõi</h3>
+                            <span>Guideline, survey và khóa nền tảng</span>
+                        </div>
+                        <div class="spotlight-grid" id="keyActivitySpotlights"></div>
+                    </div>
+
+                    <div class="learning-overview-grid">
+                        <div class="learning-card glass-panel wide-card">
+                            <div class="section-heading-row">
+                                <h3>Nhịp tương tác theo ngày</h3>
+                                <span>Lượt xem, thao tác nộp bài và người học</span>
+                            </div>
+                            <div class="learning-chart-frame chart-medium">
+                                <canvas id="learningDailyInteractionChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="learning-card glass-panel wide-card">
+                            <div class="section-heading-row">
+                                <h3>Phễu mở khóa Pre-Program Survey</h3>
+                                <span>Tín hiệu trước khi vào kho tài liệu</span>
+                            </div>
+                            <div class="gate-summary-grid" id="preProgramGateSummary"></div>
                         </div>
                     </div>
 
@@ -324,6 +351,6 @@
     </div>
 
     <script src="app.js?v=8"></script>
-    <script src="learning-dashboard.js?v=7"></script>
+    <script src="learning-dashboard.js?v=8"></script>
 </body>
 </html>

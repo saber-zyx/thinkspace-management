@@ -618,6 +618,158 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
         )
     ).mappings().one()
 
+    daily_interactions = db.execute(
+        text(
+            """
+            SELECT
+                e.event_date,
+                COUNT(*) AS total_interactions,
+                COUNT(*) FILTER (WHERE e.is_access_event = TRUE) AS access_interactions,
+                COUNT(*) FILTER (WHERE e.progress_signal_type = 'submission_work') AS submission_work_interactions,
+                COUNT(*) FILTER (WHERE e.is_submission_final_event = TRUE) AS submitted_interactions,
+                COUNT(DISTINCT u.email) AS active_users,
+                COUNT(DISTINCT u.team_name_key) FILTER (
+                    WHERE u.team_name_key IS NOT NULL
+                ) AS active_teams
+            FROM silver_moodle_learning_events e
+            JOIN gold_registered_user_learning_summary u
+                ON LOWER(TRIM(e.email)) = u.email
+            GROUP BY e.event_date
+            ORDER BY e.event_date
+            """
+        )
+    ).mappings().all()
+
+    key_activity_spotlights = db.execute(
+        text(
+            """
+            WITH target_activities AS (
+                SELECT *
+                FROM (
+                    VALUES
+                        (1, 'lms_guideline', 'UEH LMS Registration Guideline', 714),
+                        (2, 'pre_program_survey_page', 'Pre-Program Survey - trang hướng dẫn', 707),
+                        (3, 'pre_program_survey_activity', 'Pre-Program Survey - activity survey', 709),
+                        (4, 'foundations_course', 'Foundations of Digital Entrepreneurship Course', 712)
+                ) AS t(display_order, spotlight_key, spotlight_label, moodle_course_module_id)
+            ),
+            registered_total AS (
+                SELECT COUNT(*) AS total_registered_users
+                FROM gold_registered_user_learning_summary
+            ),
+            activity_events AS (
+                SELECT
+                    t.display_order,
+                    t.spotlight_key,
+                    t.spotlight_label,
+                    t.moodle_course_module_id,
+                    COALESCE(MAX(e.activity_type), MAX(d.activity_type), 'unknown') AS activity_type,
+                    COALESCE(MAX(e.activity_name), MAX(d.activity_name), t.spotlight_label) AS activity_name,
+                    COUNT(u.email) FILTER (WHERE e.is_access_event = TRUE) AS access_event_count,
+                    COUNT(DISTINCT u.email) FILTER (
+                        WHERE e.is_access_event = TRUE
+                    ) AS unique_viewers,
+                    COUNT(u.email) FILTER (
+                        WHERE e.progress_signal_type = 'submission_work'
+                    ) AS submission_work_event_count,
+                    COUNT(u.email) FILTER (
+                        WHERE e.is_submission_final_event = TRUE
+                    ) AS submission_final_event_count,
+                    COUNT(DISTINCT u.email) FILTER (
+                        WHERE e.is_submission_final_event = TRUE
+                    ) AS unique_submitters,
+                    MAX(e.event_time) FILTER (
+                        WHERE u.email IS NOT NULL
+                    ) AS last_interaction_at
+                FROM target_activities t
+                LEFT JOIN dim_moodle_course_activities d
+                    ON d.moodle_course_module_id = t.moodle_course_module_id
+                LEFT JOIN silver_moodle_learning_events e
+                    ON e.moodle_course_module_id = t.moodle_course_module_id
+                LEFT JOIN gold_registered_user_learning_summary u
+                    ON LOWER(TRIM(e.email)) = u.email
+                GROUP BY
+                    t.display_order,
+                    t.spotlight_key,
+                    t.spotlight_label,
+                    t.moodle_course_module_id
+            )
+            SELECT
+                a.*,
+                ROUND(
+                    CASE
+                        WHEN r.total_registered_users = 0 THEN 0
+                        ELSE a.unique_viewers::NUMERIC * 100 / r.total_registered_users
+                    END,
+                    1
+                ) AS viewer_rate
+            FROM activity_events a
+            CROSS JOIN registered_total r
+            ORDER BY a.display_order
+            """
+        )
+    ).mappings().all()
+
+    pre_program_gate_summary = db.execute(
+        text(
+            """
+            WITH registered AS (
+                SELECT email, team_name_key
+                FROM gold_registered_user_learning_summary
+            ),
+            user_flags AS (
+                SELECT
+                    u.email,
+                    u.team_name_key,
+                    COUNT(*) FILTER (
+                        WHERE e.moodle_course_module_id = 714
+                          AND e.is_access_event = TRUE
+                    ) > 0 AS viewed_lms_guideline,
+                    COUNT(*) FILTER (
+                        WHERE e.moodle_course_module_id = 707
+                          AND e.is_access_event = TRUE
+                    ) > 0 AS viewed_survey_page,
+                    COUNT(*) FILTER (
+                        WHERE e.moodle_course_module_id = 709
+                    ) > 0 AS touched_survey_activity,
+                    COUNT(*) FILTER (
+                        WHERE e.moodle_course_module_id = 709
+                          AND e.is_submission_final_event = TRUE
+                    ) > 0 AS submitted_survey_activity,
+                    COUNT(*) FILTER (
+                        WHERE e.is_access_event = TRUE
+                          AND e.moodle_course_module_id IS NOT NULL
+                          AND e.moodle_course_module_id NOT IN (707, 709, 714)
+                    ) > 0 AS accessed_content_after_gate
+                FROM registered u
+                LEFT JOIN silver_moodle_learning_events e
+                    ON LOWER(TRIM(e.email)) = u.email
+                GROUP BY u.email, u.team_name_key
+            )
+            SELECT
+                COUNT(*) AS total_registered_users,
+                COUNT(*) FILTER (WHERE viewed_lms_guideline = TRUE) AS guideline_viewers,
+                COUNT(*) FILTER (WHERE viewed_survey_page = TRUE) AS survey_page_viewers,
+                COUNT(*) FILTER (WHERE touched_survey_activity = TRUE) AS survey_activity_users,
+                COUNT(*) FILTER (WHERE submitted_survey_activity = TRUE) AS survey_submitters,
+                COUNT(*) FILTER (WHERE accessed_content_after_gate = TRUE) AS post_gate_content_users,
+                COUNT(DISTINCT team_name_key) FILTER (
+                    WHERE accessed_content_after_gate = TRUE
+                      AND team_name_key IS NOT NULL
+                ) AS post_gate_active_teams,
+                COUNT(*) FILTER (
+                    WHERE viewed_lms_guideline = FALSE
+                      AND accessed_content_after_gate = TRUE
+                ) AS skipped_guideline_but_accessed_content,
+                COUNT(*) FILTER (
+                    WHERE viewed_survey_page = TRUE
+                      AND accessed_content_after_gate = FALSE
+                ) AS viewed_survey_but_no_content_access
+            FROM user_flags
+            """
+        )
+    ).mappings().one()
+
     activity_type_summary = db.execute(
         text(
             """
@@ -783,6 +935,24 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
         },
         "team_summary": dict(team_summary),
         "individual_summary": dict(individual_summary),
+        "daily_interactions": [
+            {
+                **dict(row),
+                "event_date": row["event_date"].isoformat() if row["event_date"] else None,
+            }
+            for row in daily_interactions
+        ],
+        "key_activity_spotlights": [
+            {
+                **dict(row),
+                "viewer_rate": float(row["viewer_rate"] or 0),
+                "last_interaction_at": row["last_interaction_at"].isoformat()
+                if row["last_interaction_at"]
+                else None,
+            }
+            for row in key_activity_spotlights
+        ],
+        "pre_program_gate_summary": dict(pre_program_gate_summary),
         "activity_type_summary": [dict(row) for row in activity_type_summary],
         "top_viewed_activities": [
             {
