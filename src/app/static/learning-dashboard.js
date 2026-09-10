@@ -73,6 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderOverviewKpis(data);
             renderKeyActivitySpotlights(data);
             renderPreProgramGateSummary(data);
+            renderFoundationCourseSummary(data);
             renderOverviewCharts(data);
             renderActivityLists(data);
             renderSubmissionTables(data);
@@ -235,29 +236,61 @@ document.addEventListener('DOMContentLoaded', () => {
         const summary = data.pre_program_gate_summary || {};
         const rows = [
             {
-                label: 'Đã đọc UEH LMS guideline',
-                value: summary.guideline_viewers,
-                help: 'Dấu hiệu người học có xem hướng dẫn đăng ký LMS.'
-            },
-            {
-                label: 'Đã xem trang survey',
+                label: 'Đã xem Pre-Program Survey',
                 value: summary.survey_page_viewers,
                 help: 'Dấu hiệu người học mở trang Pre-Program Survey đang hiển thị trên Moodle.'
             },
             {
-                label: 'Đã vào kho tài liệu sau survey',
-                value: summary.post_gate_content_users,
-                help: 'Dấu hiệu người học đã truy cập nội dung khác sau cổng survey.'
+                label: 'Đã vào nội dung khác sau survey',
+                value: summary.post_survey_content_users,
+                help: 'Dấu hiệu người học đã có log ở nội dung khác sau khi mở trang survey.'
             },
             {
-                label: 'Bỏ guideline nhưng vẫn vào tài liệu',
-                value: summary.skipped_guideline_but_accessed_content,
-                help: 'Nhóm này có thể đã đi thẳng vào tài liệu, cần kiểm tra nếu guideline là bắt buộc.'
+                label: 'Xem survey nhưng chưa vào nội dung khác',
+                value: summary.viewed_survey_but_no_later_content,
+                help: 'Nhóm này đã mở survey nhưng chưa thấy log học tập tiếp theo trong dữ liệu hiện có.'
+            }
+        ];
+
+        container.innerHTML = rows.map(row => `
+            <div class="gate-summary-item">
+                <strong>${numberValue(row.value)}</strong>
+                <span>${escapeHtml(row.label)}</span>
+                <small>${escapeHtml(row.help)}</small>
+            </div>
+        `).join('');
+    }
+
+    function renderFoundationCourseSummary(data) {
+        const container = document.getElementById('foundationCourseSummary');
+        if (!container) return;
+
+        const summary = data.foundation_course_summary || {};
+        const rows = [
+            {
+                label: 'Đã đọc UEH LMS Registration Guideline (FMC3)',
+                value: summary.fmc3_guideline_viewers,
+                help: 'Dấu hiệu người học mở page hướng dẫn đăng ký LMS của riêng khóa Foundations/FMC3.'
             },
             {
-                label: 'Xem survey nhưng chưa vào tài liệu',
-                value: summary.viewed_survey_but_no_content_access,
-                help: 'Nhóm có thể đang bị kẹt ở bước survey hoặc chưa quay lại học.'
+                label: 'Đã vào tài liệu milestone FMC3',
+                value: summary.foundation_content_users,
+                help: 'Dấu hiệu người học đã truy cập các module milestone thuộc Foundations/FMC3.'
+            },
+            {
+                label: 'Đội đã hoạt động trong FMC3',
+                value: summary.foundation_active_teams,
+                help: 'Số đội có ít nhất một thành viên truy cập tài liệu milestone FMC3.'
+            },
+            {
+                label: 'Bỏ guideline FMC3 nhưng vẫn vào tài liệu',
+                value: summary.skipped_fmc3_guideline_but_accessed_content,
+                help: 'Người học chưa mở guideline FMC3 nhưng đã truy cập tài liệu milestone.'
+            },
+            {
+                label: 'Đọc guideline FMC3 nhưng chưa vào tài liệu',
+                value: summary.viewed_fmc3_guideline_but_no_content_access,
+                help: 'Người học đã mở guideline FMC3 nhưng chưa có log truy cập tài liệu milestone.'
             }
         ];
 

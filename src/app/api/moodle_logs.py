@@ -647,10 +647,10 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
                 SELECT *
                 FROM (
                     VALUES
-                        (1, 'lms_guideline', 'UEH LMS Registration Guideline', 714),
-                        (2, 'pre_program_survey_page', 'Pre-Program Survey', 707),
-                        (3, 'foundations_course', 'Foundations of Digital Entrepreneurship Course', 712)
-                ) AS t(display_order, spotlight_key, spotlight_label, moodle_course_module_id)
+                        (1, 'lms_guideline', 'UEH LMS Registration Guideline (FMC3)', 714, ARRAY[714]::INTEGER[]),
+                        (2, 'pre_program_survey_page', 'Pre-Program Survey', 707, ARRAY[707]::INTEGER[]),
+                        (3, 'foundations_course', 'Foundations of Digital Entrepreneurship Course', 712, ARRAY[650, 651, 653, 654, 656, 657, 659, 660, 662, 663, 712]::INTEGER[])
+                ) AS t(display_order, spotlight_key, spotlight_label, moodle_course_module_id, tracked_module_ids)
             ),
             registered_total AS (
                 SELECT COUNT(*) AS total_registered_users
@@ -662,44 +662,88 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
                     t.spotlight_key,
                     t.spotlight_label,
                     t.moodle_course_module_id,
-                    COALESCE(MAX(e.activity_type), MAX(d.activity_type), 'unknown') AS activity_type,
+                    COALESCE(MAX(d.activity_type), 'unknown') AS activity_type,
                     CASE
                         WHEN t.spotlight_key = 'pre_program_survey_page'
                             THEN t.spotlight_label
-                        ELSE COALESCE(MAX(e.activity_name), MAX(d.activity_name), t.spotlight_label)
+                        ELSE COALESCE(MAX(d.activity_name), t.spotlight_label)
                     END AS activity_name,
-                    COALESCE(MAX(d.total_event_rows), 0) AS total_moodle_log_rows,
-                    COALESCE(MAX(d.learning_event_rows), 0) AS total_learning_log_rows,
-                    COALESCE(MAX(d.unique_learning_users), 0) AS total_learning_log_users,
-                    COUNT(u.email) FILTER (WHERE e.is_access_event = TRUE) AS access_event_count,
-                    COUNT(DISTINCT u.email) FILTER (
-                        WHERE e.is_access_event = TRUE
-                    ) AS unique_viewers,
-                    COUNT(u.email) FILTER (
-                        WHERE e.progress_signal_type = 'submission_work'
-                    ) AS submission_work_event_count,
-                    COUNT(u.email) FILTER (
-                        WHERE e.is_submission_final_event = TRUE
-                    ) AS submission_final_event_count,
-                    COUNT(DISTINCT u.email) FILTER (
-                        WHERE e.is_submission_final_event = TRUE
-                    ) AS unique_submitters,
-                    MAX(e.event_time) FILTER (
-                        WHERE u.email IS NOT NULL
+                    COALESCE((
+                        SELECT SUM(scope_d.total_event_rows)
+                        FROM dim_moodle_course_activities scope_d
+                        WHERE scope_d.moodle_course_module_id = ANY(t.tracked_module_ids)
+                    ), 0) AS total_moodle_log_rows,
+                    COALESCE((
+                        SELECT SUM(scope_d.learning_event_rows)
+                        FROM dim_moodle_course_activities scope_d
+                        WHERE scope_d.moodle_course_module_id = ANY(t.tracked_module_ids)
+                    ), 0) AS total_learning_log_rows,
+                    COALESCE((
+                        SELECT COUNT(DISTINCT scope_e.email)
+                        FROM silver_moodle_learning_events scope_e
+                        WHERE scope_e.moodle_course_module_id = ANY(t.tracked_module_ids)
+                    ), 0) AS total_learning_log_users,
+                    COALESCE((
+                        SELECT COUNT(scope_u.email)
+                        FROM silver_moodle_learning_events scope_e
+                        JOIN gold_registered_user_learning_summary scope_u
+                            ON LOWER(TRIM(scope_e.email)) = scope_u.email
+                        WHERE scope_e.moodle_course_module_id = ANY(t.tracked_module_ids)
+                          AND scope_e.is_access_event = TRUE
+                    ), 0) AS access_event_count,
+                    COALESCE((
+                        SELECT COUNT(DISTINCT scope_u.email)
+                        FROM silver_moodle_learning_events scope_e
+                        JOIN gold_registered_user_learning_summary scope_u
+                            ON LOWER(TRIM(scope_e.email)) = scope_u.email
+                        WHERE scope_e.moodle_course_module_id = ANY(t.tracked_module_ids)
+                          AND scope_e.is_access_event = TRUE
+                    ), 0) AS unique_viewers,
+                    COALESCE((
+                        SELECT COUNT(scope_u.email)
+                        FROM silver_moodle_learning_events scope_e
+                        JOIN gold_registered_user_learning_summary scope_u
+                            ON LOWER(TRIM(scope_e.email)) = scope_u.email
+                        WHERE scope_e.moodle_course_module_id = ANY(t.tracked_module_ids)
+                          AND scope_e.progress_signal_type = 'submission_work'
+                    ), 0) AS submission_work_event_count,
+                    COALESCE((
+                        SELECT COUNT(scope_u.email)
+                        FROM silver_moodle_learning_events scope_e
+                        JOIN gold_registered_user_learning_summary scope_u
+                            ON LOWER(TRIM(scope_e.email)) = scope_u.email
+                        WHERE scope_e.moodle_course_module_id = ANY(t.tracked_module_ids)
+                          AND scope_e.is_submission_final_event = TRUE
+                    ), 0) AS submission_final_event_count,
+                    COALESCE((
+                        SELECT COUNT(DISTINCT scope_u.email)
+                        FROM silver_moodle_learning_events scope_e
+                        JOIN gold_registered_user_learning_summary scope_u
+                            ON LOWER(TRIM(scope_e.email)) = scope_u.email
+                        WHERE scope_e.moodle_course_module_id = ANY(t.tracked_module_ids)
+                          AND scope_e.is_submission_final_event = TRUE
+                    ), 0) AS unique_submitters,
+                    (
+                        SELECT MAX(scope_e.event_time)
+                        FROM silver_moodle_learning_events scope_e
+                        JOIN gold_registered_user_learning_summary scope_u
+                            ON LOWER(TRIM(scope_e.email)) = scope_u.email
+                        WHERE scope_e.moodle_course_module_id = ANY(t.tracked_module_ids)
                     ) AS last_interaction_at,
-                    MAX(d.last_seen_at) AS last_moodle_log_at
+                    (
+                        SELECT MAX(scope_d.last_seen_at)
+                        FROM dim_moodle_course_activities scope_d
+                        WHERE scope_d.moodle_course_module_id = ANY(t.tracked_module_ids)
+                    ) AS last_moodle_log_at
                 FROM target_activities t
                 LEFT JOIN dim_moodle_course_activities d
                     ON d.moodle_course_module_id = t.moodle_course_module_id
-                LEFT JOIN silver_moodle_learning_events e
-                    ON e.moodle_course_module_id = t.moodle_course_module_id
-                LEFT JOIN gold_registered_user_learning_summary u
-                    ON LOWER(TRIM(e.email)) = u.email
                 GROUP BY
                     t.display_order,
                     t.spotlight_key,
                     t.spotlight_label,
-                    t.moodle_course_module_id
+                    t.moodle_course_module_id,
+                    t.tracked_module_ids
             )
             SELECT
                 a.*,
@@ -721,6 +765,51 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
         text(
             """
             WITH registered AS (
+                SELECT email
+                FROM gold_registered_user_learning_summary
+            ),
+            user_flags AS (
+                SELECT
+                    u.email,
+                    COUNT(*) FILTER (
+                        WHERE e.moodle_course_module_id = 707
+                          AND e.is_access_event = TRUE
+                    ) > 0 AS viewed_survey_page,
+                    COUNT(*) FILTER (
+                        WHERE e.is_access_event = TRUE
+                          AND e.moodle_course_module_id IS NOT NULL
+                          AND e.moodle_course_module_id NOT IN (707, 709)
+                    ) > 0 AS accessed_any_content_after_survey
+                FROM registered u
+                LEFT JOIN silver_moodle_learning_events e
+                    ON LOWER(TRIM(e.email)) = u.email
+                GROUP BY u.email
+            )
+            SELECT
+                COUNT(*) AS total_registered_users,
+                COUNT(*) FILTER (WHERE viewed_survey_page = TRUE) AS survey_page_viewers,
+                COUNT(*) FILTER (WHERE accessed_any_content_after_survey = TRUE) AS post_survey_content_users,
+                COUNT(*) FILTER (
+                    WHERE viewed_survey_page = TRUE
+                      AND accessed_any_content_after_survey = FALSE
+                ) AS viewed_survey_but_no_later_content
+            FROM user_flags
+            """
+        )
+    ).mappings().one()
+
+    foundation_course_summary = db.execute(
+        text(
+            """
+            WITH foundation_modules AS (
+                SELECT *
+                FROM (
+                    VALUES
+                        (650), (651), (653), (654), (656),
+                        (657), (659), (660), (662), (663)
+                ) AS t(moodle_course_module_id)
+            ),
+            registered AS (
                 SELECT email, team_name_key
                 FROM gold_registered_user_learning_summary
             ),
@@ -731,38 +820,34 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
                     COUNT(*) FILTER (
                         WHERE e.moodle_course_module_id = 714
                           AND e.is_access_event = TRUE
-                    ) > 0 AS viewed_lms_guideline,
+                    ) > 0 AS viewed_fmc3_lms_guideline,
                     COUNT(*) FILTER (
-                        WHERE e.moodle_course_module_id = 707
+                        WHERE fm.moodle_course_module_id IS NOT NULL
                           AND e.is_access_event = TRUE
-                    ) > 0 AS viewed_survey_page,
-                    COUNT(*) FILTER (
-                        WHERE e.is_access_event = TRUE
-                          AND e.moodle_course_module_id IS NOT NULL
-                          AND e.moodle_course_module_id NOT IN (707, 709, 714)
-                    ) > 0 AS accessed_content_after_gate
+                    ) > 0 AS accessed_foundation_content
                 FROM registered u
                 LEFT JOIN silver_moodle_learning_events e
                     ON LOWER(TRIM(e.email)) = u.email
+                LEFT JOIN foundation_modules fm
+                    ON e.moodle_course_module_id = fm.moodle_course_module_id
                 GROUP BY u.email, u.team_name_key
             )
             SELECT
                 COUNT(*) AS total_registered_users,
-                COUNT(*) FILTER (WHERE viewed_lms_guideline = TRUE) AS guideline_viewers,
-                COUNT(*) FILTER (WHERE viewed_survey_page = TRUE) AS survey_page_viewers,
-                COUNT(*) FILTER (WHERE accessed_content_after_gate = TRUE) AS post_gate_content_users,
+                COUNT(*) FILTER (WHERE viewed_fmc3_lms_guideline = TRUE) AS fmc3_guideline_viewers,
+                COUNT(*) FILTER (WHERE accessed_foundation_content = TRUE) AS foundation_content_users,
                 COUNT(DISTINCT team_name_key) FILTER (
-                    WHERE accessed_content_after_gate = TRUE
+                    WHERE accessed_foundation_content = TRUE
                       AND team_name_key IS NOT NULL
-                ) AS post_gate_active_teams,
+                ) AS foundation_active_teams,
                 COUNT(*) FILTER (
-                    WHERE viewed_lms_guideline = FALSE
-                      AND accessed_content_after_gate = TRUE
-                ) AS skipped_guideline_but_accessed_content,
+                    WHERE viewed_fmc3_lms_guideline = FALSE
+                      AND accessed_foundation_content = TRUE
+                ) AS skipped_fmc3_guideline_but_accessed_content,
                 COUNT(*) FILTER (
-                    WHERE viewed_survey_page = TRUE
-                      AND accessed_content_after_gate = FALSE
-                ) AS viewed_survey_but_no_content_access
+                    WHERE viewed_fmc3_lms_guideline = TRUE
+                      AND accessed_foundation_content = FALSE
+                ) AS viewed_fmc3_guideline_but_no_content_access
             FROM user_flags
             """
         )
@@ -954,6 +1039,7 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
             for row in key_activity_spotlights
         ],
         "pre_program_gate_summary": dict(pre_program_gate_summary),
+        "foundation_course_summary": dict(foundation_course_summary),
         "activity_type_summary": [dict(row) for row in activity_type_summary],
         "top_viewed_activities": [
             {

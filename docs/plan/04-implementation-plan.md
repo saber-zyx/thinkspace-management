@@ -233,8 +233,8 @@
 - **Muc tieu**: Bo sung cac insight quan trong cho manager trong Learning Dashboard Overview: nhịp tương tác theo ngày, spotlight cho `UEH LMS REGISTRATION GUIDELINE`, `Pre-Program Survey`, và `Foundations of Digital Entrepreneurship Course`.
 - **File anh huong**: `src/app/api/moodle_logs.py`, `src/app/static/index.html`, `src/app/static/learning-dashboard.js`, `src/app/static/styles.css`, `tests/test_main.py`.
 - **Metric moi**: `daily_interactions` gom tong interaction, luot xem, thao tac nop bai, lan da nop bai, so nguoi hoc va so doi hoat dong theo tung ngay.
-- **Spotlight moi**: `key_activity_spotlights` theo doi module `714` guideline LMS, module `707` trang survey, module `709` activity survey, module `712` Foundations subsection.
-- **Pheu survey moi**: `pre_program_gate_summary` theo doi so nguoi da doc guideline, da xem survey page, da mo survey activity, da vao kho tai lieu sau survey, bo qua guideline nhung van vao tai lieu, va xem survey nhung chua vao tai lieu.
+- **Spotlight moi**: `key_activity_spotlights` theo doi module `714` guideline LMS, module `707` trang survey, va module `712` Foundations subsection.
+- **Pheu survey moi**: `pre_program_gate_summary` theo doi so nguoi da xem survey page va co di tiep sang noi dung khac hay khong. Cac chi so guideline FMC3 duoc tach rieng tu TASK-035.
 - **Ghi chu hoc tap**: Day la vi du ve dashboard metric theo business question. Truoc khi ve bieu do, can chot cau hoi manager muon tra loi va gan moi chi so voi grain ro rang: ngay, user da dang ky, team, hay Moodle activity.
 
 ## TASK-034: Chuan hoa spotlight Pre-Program Survey va Foundations
@@ -244,3 +244,11 @@
 - **Quyet dinh UI**: `Pre-Program Survey` chi hien mot page dang hien thi cho nguoi hoc la module `707`; activity an module `709` khong dua vao spotlight/phieu quan ly.
 - **Quyet dinh metric**: `Foundations of Digital Entrepreneurship Course` module `712` hien note neu chi co log he thong/admin, nhung khong cong vao so nguoi hoc hoac luot xem cua thi sinh.
 - **Ghi chu hoc tap**: Trong log Moodle, cung mot `course module id` co the co log admin/system va log learner. Dashboard phai chot grain va actor ro rang truoc khi tinh KPI.
+
+## TASK-035: Tach Pre-Program Survey va FMC3 thanh hai funnel rieng
+- **Trang thai**: Hoan thanh local.
+- **Muc tieu**: Khong tron tin hieu survey dau vao voi tin hieu doc guideline/tai lieu cua khoa `Foundations of Digital Entrepreneurship Course`.
+- **File anh huong**: `src/app/api/moodle_logs.py`, `src/app/static/index.html`, `src/app/static/learning-dashboard.js`, `tests/test_main.py`, `docs/plan/09-decision-log.md`.
+- **Thay doi metric**: `pre_program_gate_summary` chi theo doi viec xem trang Pre-Program Survey va viec co di tiep sang noi dung khac hay khong.
+- **Metric moi**: `foundation_course_summary` theo doi `UEH LMS Registration Guideline (FMC3)` module `714`, so nguoi vao tai lieu milestone FMC3, so doi hoat dong, va nhom bo guideline FMC3 nhung van vao tai lieu milestone.
+- **Ghi chu hoc tap**: Khi mot dashboard co nhieu business process gan nhau, can tach funnel theo dung ngu canh nghiep vu. Cung la chu "guideline" nhung guideline LMS cua FMC3 khong duoc tron vao Pre-Program Survey.

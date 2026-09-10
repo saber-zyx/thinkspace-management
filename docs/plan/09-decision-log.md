@@ -179,13 +179,19 @@
 - **Ket qua kiem chung**: Script seed Neon da chay thanh cong; Neon co `4176` bronze events, `113` Moodle participants va `101` registrations. API Render da doc du lieu moi tu Neon.
 
 ## ADR-035: Tach Tin Hieu Guideline, Survey Va Hoc Sau Cong
-- **Quyet dinh**: Learning Dashboard Overview theo doi rieng `UEH LMS REGISTRATION GUIDELINE`, trang `Pre-Program Survey`, activity survey, subsection `Foundations of Digital Entrepreneurship Course`, va nhom nguoi da vao noi dung sau cong survey.
+- **Quyet dinh**: Learning Dashboard Overview theo doi rieng `UEH LMS Registration Guideline (FMC3)`, trang `Pre-Program Survey`, subsection `Foundations of Digital Entrepreneurship Course`, va nhom nguoi da vao noi dung sau cong survey.
 - **Ly do**: Manager can biet nguoi hoc co doc huong dan LMS va co di qua survey hay khong. Khong duoc xem `Course module viewed` la da hoan thanh survey; day chi la tin hieu da xem/mo activity. Tin hieu hoan thanh survey can duoc xac dinh rieng khi log Moodle co event submit/complete phu hop.
 - **Quy tac dem v0**: Cac chi so spotlight chi dem user co trong `gold_registered_user_learning_summary`. Cac log khong map duoc email dang ky khong duoc tinh vao ty le thí sinh.
-- **Ket qua local hien tai**: Guideline LMS co `3` nguoi dang ky da xem; trang survey co `26` nguoi xem; activity survey module `709` chua co registered user nao map duoc; `35` nguoi da truy cap noi dung khac sau cong survey.
+- **Ket qua local hien tai**: Guideline LMS co `3` nguoi dang ky da xem; trang survey co `26` nguoi xem; `35` nguoi da truy cap noi dung khac sau cong survey. Cac chi so FMC3 duoc tach rieng trong ADR-037.
 
 ## ADR-036: Khong Tron Log He Thong Vao Tuong Tac Hoc Tap
 - **Quyet dinh**: Learning Dashboard chi tinh tuong tac hoc tap bang log cua learner da map duoc vao danh sach dang ky. Log admin/system nhu `Course module created` hoac `Course module updated` duoc hien nhu ghi chu van hanh neu can, khong cong vao KPI nguoi hoc.
 - **Ly do**: Module `712` Foundations hien co log `Course module created/updated` do admin thuc hien, nhung chua co learner interaction. Neu cong log nay vao KPI, manager se hieu nham rang thi sinh da truy cap noi dung.
 - **Quyet dinh Pre-Program Survey**: Spotlight chi hien page `Pre-Program Survey` module `707`. Activity an module `709` khong hien trong spotlight/phieu manager vi no khong phai diem cham truc tiep nguoi hoc thay tren giao dien.
 - **Tac dong**: UI co the hien "co log he thong, chua co thi sinh truy cap" cho activity quan trong, giup phan biet tinh trang cau hinh Moodle voi hanh vi hoc tap that.
+
+## ADR-037: Tach Funnel Survey Va Funnel FMC3
+- **Quyet dinh**: `Pre-Program Survey` va `Foundations of Digital Entrepreneurship Course` duoc tinh bang hai summary rieng. `pre_program_gate_summary` khong con chua chi so "bo guideline nhung van vao tai lieu". Chi so do chuyen sang `foundation_course_summary` va chi ap dung cho `UEH LMS Registration Guideline (FMC3)`.
+- **Ly do**: Page survey module `707` la cong survey dau vao, trong khi guideline module `714` la huong dan dang ky LMS cua rieng khoa FMC3. Neu dat chung, manager co the hieu nham nguoi hoc bo survey guideline, trong khi thuc te la bo guideline cua khoa FMC3.
+- **Dinh nghia FMC3 v0**: Tam thoi xem cac module milestone `650, 651, 653, 654, 656, 657, 659, 660, 662, 663` la tai lieu/noi dung chinh cua FMC3. Buoc toi uu sau can lay metadata cau truc course tu Moodle de map parent subsection chinh xac hon.
+- **Tac dong**: Dashboard hien rieng khoi `Pre-Program Survey` va khoi `Foundations of Digital Entrepreneurship Course`, giup nguoi quan ly doc insight dung ngu canh.
