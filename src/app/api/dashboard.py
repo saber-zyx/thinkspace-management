@@ -21,6 +21,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         .filter(team_name_clean.is_(None))
         .scalar()
     )
+    total_projects = (total_teams or 0) + (total_individuals or 0)
     
     # Số lượng theo ngày
     daily_registrations = db.query(
@@ -70,6 +71,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
             "total_users": total_users,
             "total_teams": total_teams,
             "total_individuals": total_individuals,
+            "total_projects": total_projects,
         },
         "charts": {
             "daily_trend": {

@@ -287,3 +287,10 @@
 - **API moi**: `GET /api/v1/moodle-logs/live-ingestion/status` de xem trang thai pipeline; `POST /api/v1/moodle-logs/live-ingestion/run-once` de chay mot batch incremental.
 - **Nguon v0**: Ho tro adapter doc PostgreSQL Moodle standard log store thong qua bien moi truong `MOODLE_LOG_SOURCE_DATABASE_URL`. Khi chua cau hinh nguon, endpoint tra `not_configured` thay vi gia lap thanh cong.
 - **Ghi chu hoc tap**: Watermark la cot dung de nho "da xu ly den dau". Trong pipeline log, watermark tot nhat la `moodle_log_id` tang dan; neu khong co id on dinh moi dung den timestamp.
+
+## TASK-045: Chuẩn Bị Chạy Live Log Ingestion Định Kỳ Ở Localhost
+- **Trạng thái**: Hoàn thành bước khung vận hành local, chờ cấu hình nguồn Moodle read-only thật.
+- **Mục tiêu**: Cho phép chạy pipeline lấy log mới theo chu kỳ 30-60 phút ở localhost mà không cần upload CSV thủ công.
+- **File ảnh hưởng**: `.env.example`, `scripts/run-live-log-ingestion-loop.ps1`, `docs/plan/09-decision-log.md`, `docs/plan/15-moodle-log-ingestion-architecture.md`, `tests/test_main.py`.
+- **Cách chạy local**: Sau khi cấu hình `MOODLE_LOG_SOURCE_DATABASE_URL` trong `.env` và restart app, chạy `.\scripts\run-live-log-ingestion-loop.ps1 -IntervalMinutes 30`.
+- **Ghi chú học tập**: Script này đóng vai trò scheduler đơn giản. Trong data engineering thực tế, bước này có thể được thay bằng cron, GitHub Actions, Airflow, Dagster hoặc Prefect, nhưng logic cốt lõi vẫn là gọi một batch incremental có watermark và audit.

@@ -7,7 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <link rel="stylesheet" href="styles.css?v=9">
+    <link rel="stylesheet" href="styles.css?v=18">
 </head>
 <body>
     <div class="background-shapes">
@@ -41,12 +41,21 @@
                         <div class="stat-value highlight" id="dashTotalUsers">0</div>
                     </div>
                     <div class="stat-card glass-panel">
-                        <div class="stat-title">Số Lượng Đội</div>
+                        <div class="stat-title">Số lượng dự án</div>
                         <div class="stat-value highlight" id="dashTotalTeams">0</div>
                     </div>
                     <div class="stat-card glass-panel">
-                        <div class="stat-title">Cá Nhân Tự Do</div>
-                        <div class="stat-value highlight" id="dashTotalIndiv">0</div>
+                        <div class="stat-title">Cơ cấu dự án</div>
+                        <div class="project-stat-split">
+                            <div>
+                                <strong id="dashTeamProjects">0</strong>
+                                <span>Đội đăng ký</span>
+                            </div>
+                            <div>
+                                <strong id="dashTotalIndiv">0</strong>
+                                <span>Cá nhân tự do</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -58,7 +67,7 @@
                         </div>
                     </div>
                     <div class="chart-card glass-panel" style="grid-area: ratio;">
-                        <h3>Đội vs Cá nhân</h3>
+                        <h3>Dự án theo loại</h3>
                         <div class="chart-frame chart-frame-ratio">
                             <canvas id="ratioChart"></canvas>
                         </div>
@@ -95,7 +104,7 @@
                         <span class="toolbar-kicker">Chế độ xem</span>
                         <div class="learning-tabs" role="tablist" aria-label="Bộ lọc dashboard học tập">
                             <button class="learning-tab active" type="button" data-learning-tab="overview">Tổng quan</button>
-                            <button class="learning-tab" type="button" data-learning-tab="team">Đội</button>
+                            <button class="learning-tab" type="button" data-learning-tab="team">Dự án</button>
                             <button class="learning-tab" type="button" data-learning-tab="individual">Cá nhân</button>
                         </div>
                     </div>
@@ -108,24 +117,19 @@
                 <section class="learning-tab-panel active" id="learningOverviewPanel">
                     <div class="learning-kpi-grid">
                         <div class="learning-kpi glass-panel">
-                            <span>Tổng thí sinh</span>
-                            <strong id="learningTotalUsers">0</strong>
-                            <small id="learningAccessedUsers">0 đã học</small>
+                            <span>Tỷ lệ thí sinh có hoạt động</span>
+                            <strong id="learningActiveUserRate">0%</strong>
+                            <small id="learningAccessedUsers">0/0 thí sinh đã có hoạt động</small>
                         </div>
                         <div class="learning-kpi glass-panel">
-                            <span>Chưa bắt đầu</span>
-                            <strong id="learningNotStartedUsers">0</strong>
-                            <small>Cần nhắc truy cập Moodle</small>
-                        </div>
-                        <div class="learning-kpi glass-panel">
-                            <span>Đội đã hoạt động</span>
+                            <span>Dự án đã hoạt động</span>
                             <strong id="learningActiveTeams">0</strong>
-                            <small id="learningTotalTeams">0 đội tổng</small>
+                            <small id="learningTotalTeams">0 dự án tổng</small>
                         </div>
                         <div class="learning-kpi glass-panel">
                             <span>Đã nộp bài</span>
                             <strong id="learningSubmittedUsers">0</strong>
-                            <small id="learningSubmittedTeams">0 đội đã nộp bài</small>
+                            <small id="learningSubmittedTeams">0 dự án đã nộp bài</small>
                         </div>
                     </div>
 
@@ -171,15 +175,42 @@
                             </div>
                         </div>
                         <div class="learning-card glass-panel">
-                            <h3>Trạng thái đội</h3>
+                            <h3>Trạng thái dự án</h3>
                             <div class="learning-chart-frame chart-small">
                                 <canvas id="learningTeamStatusChart"></canvas>
                             </div>
                         </div>
-                        <div class="learning-card glass-panel wide-card">
-                            <h3>Hoạt động theo loại nội dung</h3>
-                            <div class="learning-chart-frame chart-medium">
-                                <canvas id="learningActivityTypeChart"></canvas>
+                        <div class="learning-card glass-panel wide-card milestone-traction-card">
+                            <div class="section-heading-row">
+                                <h3>Traction theo milestone</h3>
+                                <span>Guideline và tình trạng nộp bài theo dự án</span>
+                            </div>
+                            <div class="milestone-traction-wrap">
+                                <table class="milestone-traction-table">
+                                    <colgroup>
+                                        <col class="milestone-col">
+                                        <col class="guideline-col">
+                                        <col class="guideline-col">
+                                        <col class="submitted-col">
+                                        <col class="project-col">
+                                        <col class="action-col">
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th rowspan="2">Milestone</th>
+                                            <th colspan="2" class="group-guideline">Guideline Viewed</th>
+                                            <th colspan="3" class="group-submission">Submission Done</th>
+                                        </tr>
+                                        <tr>
+                                            <th class="group-guideline">Views</th>
+                                            <th class="group-guideline">Users</th>
+                                            <th class="group-submission group-start">Submitted</th>
+                                            <th class="group-submission">Dự án</th>
+                                            <th class="group-submission">Chi tiết</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="milestoneTractionTable"></tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -223,8 +254,8 @@
                         </div>
                         <div class="learning-card glass-panel">
                             <div class="section-heading-row">
-                                <h3>Đội đã nộp</h3>
-                                <span>Đội đã nộp</span>
+                                <h3>Dự án đã nộp</h3>
+                                <span>Dự án đã nộp</span>
                             </div>
                             <div class="data-list compact-list" id="submittedTeamsList"></div>
                         </div>
@@ -234,14 +265,14 @@
                 <section class="learning-tab-panel" id="learningTeamPanel">
                     <div class="learning-card glass-panel">
                         <div class="section-heading-row">
-                            <h3>Theo dõi theo đội</h3>
+                            <h3>Theo dõi theo dự án</h3>
                             <span id="teamPanelSummary">Đang chờ dữ liệu</span>
                         </div>
                         <div class="data-table-wrap">
                             <table class="data-table">
                                 <thead>
                                     <tr>
-                                        <th>Đội</th>
+                                        <th>Dự án</th>
                                         <th>Thành viên</th>
                                         <th>Đã học</th>
                                         <th>Chưa bắt đầu</th>
@@ -270,7 +301,7 @@
                                     <tr>
                                         <th>Thí sinh</th>
                                         <th>Email</th>
-                                        <th>Nhóm Moodle</th>
+                                        <th>Dự án Moodle</th>
                                         <th>Hoạt động đã xem</th>
                                         <th>Đã nộp bài</th>
                                         <th>Trạng thái</th>
@@ -357,7 +388,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=8"></script>
-    <script src="learning-dashboard.js?v=12"></script>
+    <script src="app.js?v=9"></script>
+    <script src="learning-dashboard.js?v=19"></script>
 </body>
 </html>

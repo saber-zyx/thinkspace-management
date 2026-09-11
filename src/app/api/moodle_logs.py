@@ -430,7 +430,7 @@ def get_gold_team_members(
     ).mappings().first()
 
     if not team:
-        raise HTTPException(status_code=404, detail="Không tìm thấy đội.")
+        raise HTTPException(status_code=404, detail="Không tìm thấy dự án.")
 
     members = db.execute(
         text(
@@ -632,6 +632,20 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
         )
     ).mappings().one()
 
+    team_project_count = int(team_summary["total_teams"] or 0)
+    individual_project_count = int(individual_summary["total_individuals"] or 0)
+    project_summary = {
+        "team_projects": team_project_count,
+        "individual_projects": individual_project_count,
+        "total_projects": team_project_count + individual_project_count,
+        "active_projects": int(team_summary["active_teams"] or 0)
+        + int(individual_summary["accessed_individuals"] or 0),
+        "not_started_projects": int(team_summary["not_started_teams"] or 0)
+        + int(individual_summary["not_started_individuals"] or 0),
+        "submitted_projects": int(team_summary["submitted_teams"] or 0)
+        + int(individual_summary["submitted_individuals"] or 0),
+    }
+
     daily_interactions = db.execute(
         text(
             """
@@ -654,6 +668,102 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
         )
     ).mappings().all()
 
+    milestone_traction_summary = db.execute(
+        text(
+            """
+            WITH milestone_map AS (
+                SELECT *
+                FROM (
+                    VALUES
+                        (1, 'Milestone 1', 'Start Here - Identify Your Market', 650, 651),
+                        (2, 'Milestone 2', 'Understand Your User', 653, 654),
+                        (3, 'Milestone 3', 'Coming up with the Problem Statement', 656, 657),
+                        (4, 'Milestone 4', 'Design Your Offering', 659, 660),
+                        (5, 'Milestone 5', 'Shape the Value', 662, 663),
+                        (6, 'Final Submission', 'Final Submission', 665, 666)
+                ) AS m(display_order, milestone_code, milestone_name, guideline_module_id, submission_module_id)
+            ),
+            registered_events AS (
+                SELECT
+                    e.*,
+                    u.full_name,
+                    u.email AS registered_email,
+                    u.team_name AS registered_team_name,
+                    COALESCE(u.team_name_key, u.email) AS project_key,
+                    COALESCE(NULLIF(u.team_name, ''), u.full_name) AS project_name
+                FROM silver_moodle_learning_events e
+                JOIN gold_registered_user_learning_summary u
+                    ON LOWER(TRIM(e.email)) = u.email
+            ),
+            submitted_projects AS (
+                SELECT
+                    m.display_order,
+                    e.project_key,
+                    MAX(e.project_name) AS project_name,
+                    MAX(e.registered_team_name) AS team_name,
+                    COUNT(*) AS submitted_count,
+                    COUNT(DISTINCT e.registered_email) AS submitted_user_count,
+                    MAX(e.event_time) AS latest_submitted_at
+                FROM milestone_map m
+                JOIN registered_events e
+                    ON e.moodle_course_module_id = m.submission_module_id
+                WHERE e.is_submission_final_event = TRUE
+                GROUP BY m.display_order, e.project_key
+            )
+            SELECT
+                m.display_order,
+                m.milestone_code,
+                m.milestone_name,
+                m.guideline_module_id,
+                m.submission_module_id,
+                COUNT(*) FILTER (
+                    WHERE e.moodle_course_module_id = m.guideline_module_id
+                      AND e.is_access_event = TRUE
+                ) AS guideline_view_count,
+                COUNT(DISTINCT e.email) FILTER (
+                    WHERE e.moodle_course_module_id = m.guideline_module_id
+                      AND e.is_access_event = TRUE
+                ) AS guideline_user_count,
+                COUNT(*) FILTER (
+                    WHERE e.moodle_course_module_id = m.submission_module_id
+                      AND e.is_submission_final_event = TRUE
+                ) AS submission_done_count,
+                COUNT(DISTINCT e.project_key) FILTER (
+                    WHERE e.moodle_course_module_id = m.submission_module_id
+                      AND e.is_submission_final_event = TRUE
+                ) AS submission_done_project_count,
+                COALESCE((
+                    SELECT JSON_AGG(
+                        JSON_BUILD_OBJECT(
+                            'project_key', sp.project_key,
+                            'project_name', sp.project_name,
+                            'team_name', sp.team_name,
+                            'submitted_count', sp.submitted_count,
+                            'submitted_user_count', sp.submitted_user_count,
+                            'latest_submitted_at', sp.latest_submitted_at
+                        )
+                        ORDER BY sp.latest_submitted_at DESC, sp.project_name
+                    )
+                    FROM submitted_projects sp
+                    WHERE sp.display_order = m.display_order
+                ), '[]'::JSON) AS submitted_projects
+            FROM milestone_map m
+            LEFT JOIN registered_events e
+                ON e.moodle_course_module_id IN (
+                    m.guideline_module_id,
+                    m.submission_module_id
+                )
+            GROUP BY
+                m.display_order,
+                m.milestone_code,
+                m.milestone_name,
+                m.guideline_module_id,
+                m.submission_module_id
+            ORDER BY m.display_order
+            """
+        )
+    ).mappings().all()
+
     key_activity_spotlights = db.execute(
         text(
             """
@@ -663,7 +773,7 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
                     VALUES
                         (1, 'lms_guideline', 'UEH LMS Registration Guideline (FMC3)', 714, ARRAY[714]::INTEGER[]),
                         (2, 'pre_program_survey_page', 'Pre-Program Survey', 707, ARRAY[707]::INTEGER[]),
-                        (3, 'foundations_course', 'Foundations of Digital Entrepreneurship Course', 712, ARRAY[714, 716]::INTEGER[])
+                        (3, 'certificate_submission', 'Certificate Submission', 716, ARRAY[716]::INTEGER[])
                 ) AS t(display_order, spotlight_key, spotlight_label, moodle_course_module_id, tracked_module_ids)
             ),
             registered_total AS (
@@ -815,14 +925,7 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
     foundation_course_summary = db.execute(
         text(
             """
-            WITH foundation_modules AS (
-                SELECT *
-                FROM (
-                    VALUES
-                        (714), (716)
-                ) AS t(moodle_course_module_id)
-            ),
-            registered AS (
+            WITH registered AS (
                 SELECT email, team_name_key
                 FROM gold_registered_user_learning_summary
             ),
@@ -835,22 +938,24 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
                           AND e.is_access_event = TRUE
                     ) > 0 AS viewed_fmc3_lms_guideline,
                     COUNT(*) FILTER (
-                        WHERE fm.moodle_course_module_id IS NOT NULL
+                        WHERE e.moodle_course_module_id = 716
                           AND e.is_access_event = TRUE
-                    ) > 0 AS accessed_foundation_submission
+                    ) > 0 AS accessed_foundation_submission,
+                    COUNT(*) FILTER (
+                        WHERE e.moodle_course_module_id = 716
+                          AND e.is_submission_final_event = TRUE
+                    ) > 0 AS submitted_foundation_certificate
                 FROM registered u
                 LEFT JOIN silver_moodle_learning_events e
                     ON LOWER(TRIM(e.email)) = u.email
-                LEFT JOIN foundation_modules fm
-                    ON e.moodle_course_module_id = fm.moodle_course_module_id
                 GROUP BY u.email, u.team_name_key
             )
             SELECT
                 COUNT(*) AS total_registered_users,
                 COUNT(*) FILTER (WHERE viewed_fmc3_lms_guideline = TRUE) AS fmc3_guideline_viewers,
-                COUNT(*) FILTER (WHERE accessed_foundation_submission = TRUE) AS foundation_submission_users,
+                COUNT(*) FILTER (WHERE submitted_foundation_certificate = TRUE) AS foundation_submission_users,
                 COUNT(DISTINCT team_name_key) FILTER (
-                    WHERE accessed_foundation_submission = TRUE
+                    WHERE submitted_foundation_certificate = TRUE
                       AND team_name_key IS NOT NULL
                 ) AS foundation_active_teams,
                 COUNT(*) FILTER (
@@ -1055,6 +1160,49 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
         )
     ).mappings().all()
 
+    total_registered_users = int(registered_summary["total_registered_users"] or 0)
+    formatted_key_activity_spotlights = []
+    for row in key_activity_spotlights:
+        item = dict(row)
+        if item["spotlight_key"] == "certificate_submission":
+            primary_count = int(item["unique_submitters"] or 0)
+            primary_rate = (
+                round(primary_count * 100 / total_registered_users, 1)
+                if total_registered_users
+                else 0
+            )
+            primary_detail = (
+                f"{primary_count}/{total_registered_users} thí sinh đã nộp Certificate Submission"
+            )
+            secondary_detail = (
+                f"{int(item['unique_viewers'] or 0)} người xem, "
+                f"{int(item['submission_final_event_count'] or 0)} lượt nộp bài"
+            )
+        else:
+            primary_count = int(item["unique_viewers"] or 0)
+            primary_rate = float(item["viewer_rate"] or 0)
+            primary_detail = (
+                f"{primary_count}/{total_registered_users} thí sinh đã xem {item['spotlight_label']}"
+            )
+            secondary_detail = (
+                f"{primary_count} người xem, {int(item['access_event_count'] or 0)} lượt xem"
+            )
+
+        formatted_key_activity_spotlights.append({
+            **item,
+            "viewer_rate": float(item["viewer_rate"] or 0),
+            "primary_count": primary_count,
+            "primary_rate": primary_rate,
+            "primary_detail": primary_detail,
+            "secondary_detail": secondary_detail,
+            "last_interaction_at": item["last_interaction_at"].isoformat()
+            if item["last_interaction_at"]
+            else None,
+            "last_moodle_log_at": item["last_moodle_log_at"].isoformat()
+            if item["last_moodle_log_at"]
+            else None,
+        })
+
     return {
         "registered_summary": {
             "total_registered_users": registered_summary["total_registered_users"],
@@ -1068,6 +1216,7 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
         },
         "team_summary": dict(team_summary),
         "individual_summary": dict(individual_summary),
+        "project_summary": project_summary,
         "daily_interactions": [
             {
                 **dict(row),
@@ -1075,19 +1224,8 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
             }
             for row in daily_interactions
         ],
-        "key_activity_spotlights": [
-            {
-                **dict(row),
-                "viewer_rate": float(row["viewer_rate"] or 0),
-                "last_interaction_at": row["last_interaction_at"].isoformat()
-                if row["last_interaction_at"]
-                else None,
-                "last_moodle_log_at": row["last_moodle_log_at"].isoformat()
-                if row["last_moodle_log_at"]
-                else None,
-            }
-            for row in key_activity_spotlights
-        ],
+        "milestone_traction_summary": [dict(row) for row in milestone_traction_summary],
+        "key_activity_spotlights": formatted_key_activity_spotlights,
         "pre_program_gate_summary": dict(pre_program_gate_summary),
         "foundation_course_summary": dict(foundation_course_summary),
         "ueh_lms_entrepreneurship_enrollment_summary": {
@@ -1288,7 +1426,7 @@ def get_team_activities_detail(
     ).mappings().all()
 
     if not team or not team_members:
-        raise HTTPException(status_code=404, detail="Không tìm thấy đội.")
+        raise HTTPException(status_code=404, detail="Không tìm thấy dự án.")
 
     activities = db.execute(
         text(

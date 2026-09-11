@@ -17,7 +17,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let individualLoaded = false;
     let learningStatusChart = null;
     let learningTeamStatusChart = null;
-    let learningActivityTypeChart = null;
     let learningDailyInteractionChart = null;
 
     if (learningNav) {
@@ -72,10 +71,10 @@ document.addEventListener('DOMContentLoaded', () => {
             overviewLoaded = true;
             renderOverviewKpis(data);
             renderKeyActivitySpotlights(data);
-            renderUehLmsEnrollmentSpotlight(data);
             renderPreProgramGateSummary(data);
             renderFoundationCourseSummary(data);
             renderOverviewCharts(data);
+            renderMilestoneTraction(data);
             renderActivityLists(data);
             renderSubmissionTables(data);
             setLearningUpdatedText(`Cập nhật: ${formatDateTime(new Date().toISOString())}`);
@@ -88,14 +87,14 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadTeamSummary() {
         if (teamLoaded) return;
         try {
-            setLearningUpdatedText('Đang tải dữ liệu đội...');
+            setLearningUpdatedText('Đang tải dữ liệu dự án...');
             const data = await fetchJson('/api/v1/moodle-logs/gold-team-summary');
             teamLoaded = true;
             renderTeamTable(data);
             setLearningUpdatedText(`Cập nhật: ${formatDateTime(new Date().toISOString())}`);
         } catch (error) {
-            console.error('Lỗi tải dữ liệu đội', error);
-            setLearningUpdatedText('Không tải được dữ liệu đội');
+            console.error('Lỗi tải dữ liệu dự án', error);
+            setLearningUpdatedText('Không tải được dữ liệu dự án');
         }
     }
 
@@ -122,20 +121,26 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderOverviewKpis(data) {
         const registered = data.registered_summary || {};
         const teams = data.team_summary || {};
+        const individuals = data.individual_summary || {};
+        const projects = data.project_summary || {};
+        const totalUsers = numberValue(registered.total_registered_users);
+        const accessedUsers = numberValue(registered.accessed_users);
+        const activeUserRate = totalUsers ? accessedUsers * 100 / totalUsers : 0;
 
-        setText('learningTotalUsers', registered.total_registered_users);
-        setText('learningAccessedUsers', `${numberValue(registered.accessed_users)} đã học`);
-        setText('learningNotStartedUsers', registered.not_started_users);
-        setText('learningActiveTeams', teams.active_teams);
-        setText('learningTotalTeams', `${numberValue(teams.total_teams)} đội tổng`);
+        setText('learningActiveUserRate', `${activeUserRate.toFixed(1)}%`);
+        setText('learningAccessedUsers', `${accessedUsers}/${totalUsers} thí sinh đã có hoạt động`);
+        setText('learningActiveTeams', projects.active_projects);
+        setText(
+            'learningTotalTeams',
+            `${numberValue(projects.total_projects)} dự án tổng (${numberValue(teams.total_teams)} đội + ${numberValue(individuals.total_individuals)} cá nhân)`
+        );
         setText('learningSubmittedUsers', registered.submitted_users);
-        setText('learningSubmittedTeams', `${numberValue(teams.submitted_teams)} đội đã nộp bài`);
+        setText('learningSubmittedTeams', `${numberValue(projects.submitted_projects)} dự án đã nộp bài`);
     }
 
     function renderOverviewCharts(data) {
         const registered = data.registered_summary || {};
-        const teams = data.team_summary || {};
-        const activityTypes = data.activity_type_summary || [];
+        const projects = data.project_summary || {};
         const dailyInteractions = data.daily_interactions || [];
 
         learningDailyInteractionChart = renderLineChart({
@@ -181,53 +186,127 @@ document.addEventListener('DOMContentLoaded', () => {
             canvasId: 'learningTeamStatusChart',
             labels: ['Đang hoạt động', 'Chưa bắt đầu', 'Đã nộp bài'],
             values: [
-                Math.max(numberValue(teams.active_teams) - numberValue(teams.submitted_teams), 0),
-                numberValue(teams.not_started_teams),
-                numberValue(teams.submitted_teams)
+                Math.max(numberValue(projects.active_projects) - numberValue(projects.submitted_projects), 0),
+                numberValue(projects.not_started_projects),
+                numberValue(projects.submitted_projects)
             ],
             colors: ['#254385', '#f29d76', '#10b981']
         });
 
-        learningActivityTypeChart = renderBarChart({
-            currentInstance: learningActivityTypeChart,
-            canvasId: 'learningActivityTypeChart',
-            labels: activityTypes.map(item => activityTypeLabel(item.activity_type)),
-            values: activityTypes.map(item => numberValue(item.unique_viewers)),
-            label: 'Người học đã xem'
+    }
+
+    function renderMilestoneTraction(data) {
+        const body = document.getElementById('milestoneTractionTable');
+        if (!body) return;
+
+        const rows = data.milestone_traction_summary || [];
+        body.innerHTML = rows.length
+            ? rows.map(row => `
+                <tr>
+                    <td>
+                        <strong>${escapeHtml(row.milestone_code || 'Milestone')}</strong>
+                        <span>${escapeHtml(row.milestone_name || '')}</span>
+                    </td>
+                    <td class="group-guideline">${numberValue(row.guideline_view_count)}</td>
+                    <td class="group-guideline">${numberValue(row.guideline_user_count)}</td>
+                    <td class="group-submission group-start">${numberValue(row.submission_done_count)}</td>
+                    <td class="group-submission">${numberValue(row.submission_done_project_count)}</td>
+                    <td class="group-submission">
+                        <button class="table-action-btn compact" type="button" data-milestone-detail="${escapeHtml(row.milestone_code || '')}">
+                            Xem
+                        </button>
+                    </td>
+                </tr>
+            `).join('')
+            : '<tr><td colspan="6">Chưa có dữ liệu traction theo milestone.</td></tr>';
+
+        body.querySelectorAll('[data-milestone-detail]').forEach(button => {
+            button.addEventListener('click', () => {
+                const row = rows.find(item => item.milestone_code === button.dataset.milestoneDetail);
+                openMilestoneSubmissionDetail(row);
+            });
         });
+    }
+
+    function openMilestoneSubmissionDetail(row) {
+        if (!row) return;
+        openModal(`${row.milestone_code}: dự án đã nộp bài`);
+        const projects = row.submitted_projects || [];
+        modalContent.innerHTML = projects.length
+            ? `
+                <div class="modal-summary-strip">
+                    <span><strong>${numberValue(row.submission_done_count)}</strong>Submitted</span>
+                    <span><strong>${numberValue(row.submission_done_project_count)}</strong>Dự án</span>
+                    <span><strong>${escapeHtml(row.milestone_name || '')}</strong>Milestone</span>
+                </div>
+                <div class="data-table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Dự án</th>
+                                <th>Số lần submitted</th>
+                                <th>User nộp</th>
+                                <th>Lần nộp cuối</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${projects.map(project => `
+                                <tr>
+                                    <td>${escapeHtml(project.project_name || 'Không có tên dự án')}</td>
+                                    <td>${numberValue(project.submitted_count)}</td>
+                                    <td>${numberValue(project.submitted_user_count)}</td>
+                                    <td>${escapeHtml(formatDateTime(project.latest_submitted_at))}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `
+            : '<div class="empty-state">Chưa có dự án nào nộp bài cho milestone này.</div>';
     }
 
     function renderKeyActivitySpotlights(data) {
         const container = document.getElementById('keyActivitySpotlights');
         if (!container) return;
 
-        const rows = data.key_activity_spotlights || [];
-        container.innerHTML = rows.length
-            ? rows.map(row => {
-                const hasSystemOnlyLog = numberValue(row.unique_viewers) === 0 && numberValue(row.total_moodle_log_rows) > 0;
-                const lastLearnerInteraction = row.last_interaction_at
-                    ? `lần cuối ${formatDateTime(row.last_interaction_at)}`
-                    : 'chưa có thí sinh truy cập';
-                const systemLogNote = hasSystemOnlyLog
-                    ? ` · có ${numberValue(row.total_moodle_log_rows)} log hệ thống, mới nhất ${formatDateTime(row.last_moodle_log_at)}`
-                    : '';
+        const rowsByKey = Object.fromEntries(
+            (data.key_activity_spotlights || []).map(row => [row.spotlight_key, row])
+        );
+        const summary = data.ueh_lms_entrepreneurship_enrollment_summary || {};
+        const enrolledUsers = numberValue(summary.enrolled_registered_users);
+        const totalUsers = numberValue(summary.total_registered_users);
+        const enrollmentRate = numberValue(summary.enrollment_rate);
+        const enrollmentCard = {
+            spotlight_key: 'ueh_lms_entrepreneurship',
+            spotlight_label: 'ĐĂNG KÝ UEH LMS ENTREPRENEURSHIP',
+            primary_rate: enrollmentRate,
+            primary_detail: `${enrolledUsers}/${totalUsers} thí sinh đã đăng ký khóa entrepreneurship`,
+            has_detail_button: true
+        };
+        const rows = [
+            rowsByKey.pre_program_survey_page,
+            rowsByKey.lms_guideline,
+            enrollmentCard,
+            rowsByKey.certificate_submission
+        ].filter(Boolean);
 
-                return `
-                <div class="spotlight-card">
+        container.innerHTML = rows.length
+            ? rows.map(row => `
+                <div class="spotlight-card${row.has_detail_button ? ' spotlight-card-action' : ''}">
                     <div class="spotlight-label">${escapeHtml(row.spotlight_label || row.activity_name || 'Hoạt động')}</div>
-                    <div class="spotlight-title">${escapeHtml(row.activity_name || row.spotlight_label || 'Không xác định')}</div>
-                    <div class="spotlight-metrics">
-                        <span><strong>${numberValue(row.unique_viewers)}</strong> người xem</span>
-                        <span><strong>${numberValue(row.access_event_count)}</strong> lượt xem</span>
-                        <span><strong>${numberValue(row.viewer_rate).toFixed(1)}%</strong> thí sinh</span>
+                    <div class="spotlight-rate">${numberValue(row.primary_rate).toFixed(1)}%</div>
+                    <div class="spotlight-detail-lines">
+                        <span>${escapeHtml(row.primary_detail || '')}</span>
                     </div>
-                    <div class="spotlight-meta">
-                        ${escapeHtml(activityTypeLabel(row.activity_type))} · module ${escapeHtml(row.moodle_course_module_id || 'N/A')} · ${escapeHtml(lastLearnerInteraction)}${escapeHtml(systemLogNote)}
-                    </div>
+                    ${row.has_detail_button
+                        ? '<button class="spotlight-detail-btn" type="button" data-enrollment-detail="true">Chi tiết</button>'
+                        : '<div class="spotlight-footer-spacer"></div>'}
                 </div>
-            `;
-            }).join('')
+            `).join('')
             : '<p class="empty-state">Chưa có dữ liệu hoạt động trọng yếu.</p>';
+
+        container.querySelector('[data-enrollment-detail="true"]')
+            ?.addEventListener('click', openUehLmsEnrollmentDetail);
     }
 
     function renderUehLmsEnrollmentSpotlight(data) {
@@ -242,13 +321,10 @@ document.addEventListener('DOMContentLoaded', () => {
         card.className = 'spotlight-card spotlight-card-action';
         card.innerHTML = `
             <div class="spotlight-label">ĐĂNG KÝ UEH LMS ENTREPRENEURSHIP</div>
-            <div class="spotlight-title">Đã đăng ký khóa entrepreneurship</div>
-            <div class="spotlight-metrics">
-                <span><strong>${enrolledUsers}</strong> user</span>
-                <span><strong>${totalUsers}</strong> đăng ký</span>
-                <span><strong>${enrollmentRate.toFixed(1)}%</strong> hoàn tất</span>
+            <div class="spotlight-rate">${enrollmentRate.toFixed(1)}%</div>
+            <div class="spotlight-detail-lines">
+                <span>${enrolledUsers}/${totalUsers} thí sinh đã đăng ký khóa entrepreneurship</span>
             </div>
-            <div class="spotlight-meta">${enrolledUsers}/${totalUsers} user đã đăng ký trên UEH LMS</div>
             <button class="spotlight-detail-btn" type="button">Chi tiết</button>
         `;
 
@@ -300,14 +376,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 help: 'Dấu hiệu người học mở page hướng dẫn đăng ký LMS của riêng khóa Foundations/FMC3.'
             },
             {
-                label: 'Đã vào Certificate Submission',
+                label: 'Đã nộp Certificate Submission',
                 value: summary.foundation_submission_users,
-                help: 'Dấu hiệu người học đã truy cập activity nộp bài module 716 của Foundations/FMC3.'
+                help: 'Dấu hiệu người học đã có log nộp bài hoàn tất ở module 716 của Foundations/FMC3.'
             },
             {
-                label: 'Đội đã hoạt động trong FMC3',
+                label: 'Dự án đã nộp trong FMC3',
                 value: summary.foundation_active_teams,
-                help: 'Số đội có ít nhất một thành viên đọc guideline hoặc vào Certificate Submission.'
+                help: 'Số dự án có ít nhất một thành viên nộp Certificate Submission.'
             },
             {
                 label: 'Bỏ guideline FMC3 nhưng vẫn vào submission',
@@ -367,7 +443,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderDataList({
             containerId: 'submittedTeamsList',
             rows: data.submitted_teams || [],
-            title: row => row.team_name || 'Không có tên đội',
+            title: row => row.team_name || 'Không có tên dự án',
             meta: row => `${numberValue(row.submitted_users)} người nộp · ${numberValue(row.submitted_activity_count)} hoạt động nộp bài`,
             value: row => formatDateTime(row.latest_submission_at)
         });
@@ -379,7 +455,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const rows = data.teams || [];
 
         if (summary) {
-            summary.textContent = `${numberValue(data.active_teams)} đội đã hoạt động / ${numberValue(data.total_teams)} đội`;
+            summary.textContent = `${numberValue(data.active_teams)} dự án đã hoạt động / ${numberValue(data.total_teams)} dự án đăng ký theo nhóm`;
         }
 
         if (!body) return;
@@ -387,7 +463,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ? rows.map(row => `
                 <tr>
                     <td>
-                        <div class="table-primary-text">${escapeHtml(row.team_name || 'Không có tên đội')}</div>
+                        <div class="table-primary-text">${escapeHtml(row.team_name || 'Không có tên dự án')}</div>
                     </td>
                     <td>${numberValue(row.registered_users)}</td>
                     <td>${numberValue(row.accessed_users)}</td>
@@ -403,7 +479,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </td>
                 </tr>
             `).join('')
-            : '<tr><td colspan="9">Chưa có dữ liệu đội.</td></tr>';
+            : '<tr><td colspan="9">Chưa có dữ liệu dự án.</td></tr>';
 
         body.querySelectorAll('[data-team-key]').forEach(button => {
             button.addEventListener('click', () => openTeamActivityDetail(button.dataset.teamKey));
@@ -448,13 +524,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function openTeamActivityDetail(teamKey) {
         if (!teamKey) return;
-        openModal('Chi tiết hoạt động theo đội');
+        openModal('Chi tiết hoạt động theo dự án');
         try {
             const data = await fetchJson(`/api/v1/moodle-logs/team-activities-detail?team_name_key=${encodeURIComponent(teamKey)}`);
             renderModalTeamActivities(data);
         } catch (error) {
-            console.error('Lỗi tải chi tiết hoạt động đội', error);
-            setModalError('Không tải được dữ liệu chi tiết của đội.');
+            console.error('Lỗi tải chi tiết hoạt động dự án', error);
+            setModalError('Không tải được dữ liệu chi tiết của dự án.');
         }
     }
 
@@ -471,19 +547,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function openUehLmsEnrollmentDetail() {
-        openModal('User đã đăng ký khóa entrepreneurship');
+        openModal('Thí sinh đã đăng ký khóa entrepreneurship');
         try {
             const data = await fetchJson('/api/v1/moodle-logs/ueh-lms-entrepreneurship-enrollments-detail');
             renderModalUehLmsEnrollments(data);
         } catch (error) {
             console.error('Lỗi tải chi tiết đăng ký UEH LMS', error);
-            setModalError('Không tải được danh sách user đã đăng ký khóa entrepreneurship.');
+            setModalError('Không tải được danh sách thí sinh đã đăng ký khóa entrepreneurship.');
         }
     }
 
     function renderModalTeamActivities(data) {
-        const teamName = data.team?.team_name || data.team_name_key || 'Đội';
-        modalTitle.textContent = `Đội: ${teamName}`;
+        const teamName = data.team?.team_name || data.team_name_key || 'Dự án';
+        modalTitle.textContent = `Dự án: ${teamName}`;
 
         if (!data.members || data.members.length === 0) {
             modalContent.innerHTML = '<p class="empty-state">Không có thành viên nào trong dữ liệu đăng ký.</p>';
@@ -505,8 +581,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const matched = numberValue(summary.enrolled_registered_users);
         modalContent.innerHTML = `
             <div class="modal-summary-strip">
-                <span><strong>${matched}</strong> user match email đăng ký</span>
-                <span><strong>${total}</strong> user trong database hiện tại</span>
+                <span><strong>${matched}</strong> thí sinh match email đăng ký</span>
+                <span><strong>${total}</strong> thí sinh trong database hiện tại</span>
                 <span><strong>${numberValue(summary.source_enrolled_emails)}</strong> email nguồn UEH LMS</span>
             </div>
             ${users.length ? `
@@ -516,7 +592,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <tr>
                                 <th>Họ tên</th>
                                 <th>Email</th>
-                                <th>Đội</th>
+                                <th>Dự án</th>
                                 <th>Trạng thái UEH LMS</th>
                             </tr>
                         </thead>
@@ -525,7 +601,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <tr>
                                     <td>${escapeHtml(user.full_name || 'Không có tên')}</td>
                                     <td>${escapeHtml(user.email || '')}</td>
-                                    <td>${escapeHtml(user.team_name || 'Cá nhân / chưa có đội')}</td>
+                                    <td>${escapeHtml(user.team_name || 'Cá nhân / chưa có dự án')}</td>
                                     <td>${escapeHtml(user.enrollment_status || 'enrolled')}</td>
                                 </tr>
                             `).join('')}
@@ -548,7 +624,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="member-metrics">
                     <span>${numberValue(member.viewed_activity_count)} hoạt động đã xem</span>
-                    <span>${numberValue(member.learning_event_count)} sự kiện học</span>
+                    <span>${numberValue(member.learning_event_count)} log events</span>
                     <span>${numberValue(member.submitted_activity_count)} hoạt động nộp bài</span>
                     <span>Lần học cuối: ${escapeHtml(formatDateTime(member.last_access_at))}</span>
                 </div>

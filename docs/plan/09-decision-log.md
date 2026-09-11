@@ -218,3 +218,32 @@
 - **Ly do**: Pipeline log khong duoc dua vao cam tinh "lay lai file moi nhat". Can biet lan truoc da doc den `moodle_log_id` nao, lan nay lay bao nhieu dong moi, bao nhieu dong bi trung, va neu loi thi loi o batch nao.
 - **Nguon v0**: Adapter dau tien doc tu Moodle standard log store hoac database log PostgreSQL read-only qua `MOODLE_LOG_SOURCE_DATABASE_URL`. Khong scrape HTML Live logs.
 - **Tac dong**: Dashboard van doc silver/gold nhu hien tai. Live ingestion chi la cach nap bronze lien tuc; cac metric dashboard khong can doi khi nguon chuyen tu CSV thu cong sang job incremental.
+
+## ADR-042: Doi Don Vi Quan Ly Tu Doi Sang Du An
+- **Quyet dinh**: Tren dashboard quan ly, `du an` la don vi tong hop gom `du an dang ky theo doi` va `du an ca nhan`. Cong thuc v0: `total_projects = total_team_projects + total_individual_projects`.
+- **Ly do**: Manager khong chi quan tam co bao nhieu doi nhieu thanh vien, ma can biet tong so du an dang tham gia chuong trinh. Mot thi sinh ca nhan tu do van duoc xem la mot du an rieng de theo doi tien do hoc tap va nop bai.
+- **Tac dong len dashboard dang ky**: Card `So luong doi` doi thanh `So luong du an`; card ben canh hien co cau `Doi dang ky` va `Ca nhan tu do`.
+- **Tac dong len dashboard hoc tap**: Card `Du an da hoat dong` va chart `Trang thai du an` tinh tren ca du an theo doi va du an ca nhan. `active_projects = active_team_projects + accessed_individual_projects`; `submitted_projects = submitted_team_projects + submitted_individual_projects`.
+- **Cap nhat hoat dong trong yeu**: Card `Foundations of Digital Entrepreneurship Course` khong con dem viec xem subsection module `712`. Tin hieu chinh duoc doi sang `Certificate Submission` module `716`, uu tien ty le user da nop certificate submission.
+- **Cap nhat UI KPI**: Dashboard hoc tap gop `Tong thi sinh` va `Chua bat dau` thanh card `Ty le thi sinh co hoat dong`, hien ty le `accessed_users / total_registered_users` de manager doc nhanh muc do kich hoat nen tang.
+
+## ADR-043: Them Bang Traction Theo Milestone Tren Overview
+- **Quyet dinh**: Thay card `Hoat dong theo loai noi dung` tren Learning Dashboard Overview bang bang `Traction theo milestone`.
+- **Cau hoi nghiep vu**: Manager can xem nhanh voi moi milestone, thi sinh co doc guideline khong, co vao trang submission khong, va co nop bai hoan tat khong.
+- **Grain v0**: Mot dong dai dien cho mot moc hoc tap quan trong. Pham vi gom `Milestone 1`, `Milestone 2`, `Milestone 3`, `Milestone 4`, `Milestone 5`, va `Final Submission`.
+- **Module mapping v0**: Guideline modules lan luot la `650`, `653`, `656`, `659`, `662`, `665`; submission modules lan luot la `651`, `654`, `657`, `660`, `663`, `666`.
+- **Metric v0**: Moi dong hien `Guideline Viewed` theo views va thi sinh, `Submission Viewed` theo views va thi sinh, va `Submission Done` theo luot nop va thi sinh nop. Chi dem log da map duoc vao thi sinh trong danh sach dang ky Sandbox.
+- **Tac dong pipeline**: Khong doi raw/bronze/silver. API overview tong hop truc tiep tu `silver_moodle_learning_events` va `gold_registered_user_learning_summary`, nen khi log moi duoc nap vao bronze/silver thi bang traction tu cap nhat theo du lieu hien co.
+
+## ADR-044: Rut Gon Traction Submission Theo Du An
+- **Quyet dinh**: Bo nhom cot `Submission Viewed` khoi bang `Traction theo milestone`. Bang chi giu `Guideline Viewed` va `Submission Done`.
+- **Metric v0**: `Submission Done` gom hai chi so: `submitted` la so log nop bai hoan tat, `du an` la so du an duy nhat da nop trong milestone do.
+- **Quy tac dem du an**: Du an nhom dung `team_name_key`; du an ca nhan dung `email`. Cong thuc khoa dem la `COALESCE(team_name_key, email)`, nen mot du an co nhieu thanh vien nop hoac nop nhieu lan van chi tinh la mot du an trong cot `du an`.
+- **Chi tiet dashboard**: Moi dong milestone co nut `Xem` de mo danh sach du an da nop, so lan submitted, so user nop va lan nop cuoi.
+- **Ghi chu dien giai log events**: `learning_event_count` trong modal chi tiet la tong so log events hoc tap da qua silver, khong phai so bai hoc. User co nhieu H5P/xAPI statements co the co so log events rat cao.
+
+## ADR-045: Chạy Live Log Ingestion Local Bằng Script Scheduler Nhẹ
+- **Quyết định**: Giai đoạn localhost dùng `scripts/run-live-log-ingestion-loop.ps1` để gọi `POST /api/v1/moodle-logs/live-ingestion/run-once` theo chu kỳ thay vì nhúng scheduler chạy nền trực tiếp trong FastAPI.
+- **Lý do**: Cách này dễ quan sát khi học data engineering: người vận hành thấy từng run, số dòng lấy về, số dòng insert, số dòng trùng và watermark trước/sau. Nó cũng tránh việc web app tự chạy job ẩn khi nguồn Moodle chưa được cấu hình chắc chắn.
+- **Điều kiện chạy thật**: `.env` local cần có `MOODLE_LOG_SOURCE_DATABASE_URL` read-only tới Moodle log store/database thật. Nếu endpoint status báo `is_configured = false`, script dừng để tránh tạo nhiều run `not_configured`.
+- **Hướng nâng cấp**: Khi local ổn định, có thể chuyển scheduler sang cron, GitHub Actions, Airflow, Dagster hoặc Prefect mà vẫn giữ nguyên endpoint, bảng state và bảng run audit.

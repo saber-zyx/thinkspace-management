@@ -32,7 +32,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const charts = data.charts || {};
 
             document.getElementById('dashTotalUsers').textContent = data.summary.total_users;
-            document.getElementById('dashTotalTeams').textContent = data.summary.total_teams;
+            document.getElementById('dashTotalTeams').textContent = data.summary.total_projects;
+            document.getElementById('dashTeamProjects').textContent = data.summary.total_teams;
             document.getElementById('dashTotalIndiv').textContent = data.summary.total_individuals;
 
             dailyChartInstance = renderDailyTrendChart(
@@ -43,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             ratioChartInstance = renderRatioChart(
                 ratioChartInstance,
-                data.summary.total_users - data.summary.total_individuals,
+                data.summary.total_teams,
                 data.summary.total_individuals
             );
 
@@ -147,7 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Chart(ctxRatio, {
             type: 'doughnut',
             data: {
-                labels: ['Thành viên Đội', 'Cá nhân'],
+                labels: ['Dự án theo đội', 'Dự án cá nhân'],
                 datasets: [{
                     data: [teamUsers, individualUsers],
                     backgroundColor: ['#254385', '#f29d76'],

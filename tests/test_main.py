@@ -142,6 +142,9 @@ class TestBasicSetup(unittest.TestCase):
         self.assertIn("moodle_log_ingestion_state", schema_py)
         self.assertIn("moodle_log_ingestion_runs", schema_py)
         self.assertIn("moodle_log_source_database_url", config_py)
+        self.assertTrue(Path("scripts/run-live-log-ingestion-loop.ps1").exists())
+        self.assertIn("MOODLE_LOG_SOURCE_DATABASE_URL", Path(".env.example").read_text(encoding="utf-8"))
+        self.assertIn("run-live-log-ingestion-loop.ps1", Path("docs/plan/15-moodle-log-ingestion-architecture.md").read_text(encoding="utf-8"))
 
     def test_live_moodle_log_ingestion_reports_missing_source_config(self):
         engine = create_engine("sqlite:///:memory:")
@@ -165,17 +168,22 @@ class TestBasicSetup(unittest.TestCase):
 
         self.assertIn('data-target="learningDashboardView"', index_html)
         self.assertIn('id="learningDashboardView"', index_html)
-        self.assertIn('learning-dashboard.js?v=12', index_html)
-        self.assertIn('styles.css?v=9', index_html)
+        self.assertIn('learning-dashboard.js?v=19', index_html)
+        self.assertIn('styles.css?v=18', index_html)
         self.assertIn('/api/v1/moodle-logs/learning-dashboard-overview', learning_js)
         self.assertIn('learningDailyInteractionChart', learning_js)
+        self.assertIn('milestone_traction_summary', learning_js)
+        self.assertIn('milestoneTractionTable', index_html)
+        self.assertIn('submission_done_project_count', learning_js)
         self.assertIn('renderKeyActivitySpotlights', learning_js)
         self.assertIn('renderPreProgramGateSummary', learning_js)
         self.assertIn('renderFoundationCourseSummary', learning_js)
         self.assertIn('renderUehLmsEnrollmentSpotlight', learning_js)
         self.assertIn('openUehLmsEnrollmentDetail', learning_js)
+        self.assertIn('project_summary', learning_js)
+        self.assertIn('certificate_submission', Path("src/app/api/moodle_logs.py").read_text(encoding="utf-8"))
         self.assertIn('foundation_submission_users', learning_js)
-        self.assertIn('log hệ thống', learning_js)
+        self.assertNotIn('log hệ thống', learning_js)
         self.assertIn('/api/v1/moodle-logs/gold-team-summary', learning_js)
         self.assertIn('/api/v1/moodle-logs/team-activities-detail', learning_js)
         self.assertIn('/api/v1/moodle-logs/individual-activities-detail', learning_js)
@@ -440,6 +448,7 @@ class TestBasicSetup(unittest.TestCase):
         self.assertEqual(response["summary"]["total_users"], 4)
         self.assertEqual(response["summary"]["total_teams"], 1)
         self.assertEqual(response["summary"]["total_individuals"], 2)
+        self.assertEqual(response["summary"]["total_projects"], 3)
         db.close()
 
 

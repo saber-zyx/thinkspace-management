@@ -206,3 +206,79 @@ Giới hạn hiện tại:
 - Adapter đầu tiên giả định nguồn log là PostgreSQL Moodle standard log store.
 - Nếu nguồn thật là MySQL hoặc Moodle plugin API, cần tạo thêm adapter nhưng vẫn dùng lại hai bảng state/run audit.
 - Tên activity từ database log có thể chưa đầy đủ bằng file CSV export nếu source không join thêm bảng module instance. Đây là phần tối ưu tiếp theo sau khi xác nhận được nguồn log thật.
+
+## Chạy Định Kỳ Ở Localhost
+
+Sau khi đã cấu hình nguồn Moodle thật trong `.env`, restart app để nạp biến môi trường mới:
+
+```powershell
+docker compose restart app
+```
+
+Kiểm tra trạng thái:
+
+```powershell
+Invoke-RestMethod http://localhost:8080/api/v1/moodle-logs/live-ingestion/status
+```
+
+Nếu `is_configured` là `true`, có thể chạy thử một batch:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:8080/api/v1/moodle-logs/live-ingestion/run-once
+```
+
+Sau khi batch chạy đúng, bật vòng lặp local:
+
+```powershell
+.\scripts\run-live-log-ingestion-loop.ps1 -IntervalMinutes 30
+```
+
+Muốn test nhanh một lần duy nhất:
+
+```powershell
+.\scripts\run-live-log-ingestion-loop.ps1 -IntervalMinutes 30 -MaxRuns 1
+```
+
+Trong pipeline này:
+
+- `status` dùng để kiểm tra nguồn đã sẵn sàng chưa.
+- `run-once` là một batch incremental.
+- Script vòng lặp là scheduler tạm thời cho môi trường local.
+- Dashboard không cần biết log đến từ CSV hay live ingestion; dashboard chỉ đọc các lớp `silver/gold`.
+
+## SQL Thực Hành Trong DBeaver
+
+Kiểm tra watermark hiện tại:
+
+```sql
+SELECT
+    source_name,
+    course_id,
+    last_moodle_log_id,
+    last_event_time,
+    last_success_at,
+    status,
+    error_message
+FROM moodle_log_ingestion_state
+ORDER BY source_name, course_id;
+```
+
+Kiểm tra 10 lần chạy gần nhất:
+
+```sql
+SELECT
+    id,
+    source_name,
+    started_at,
+    finished_at,
+    status,
+    rows_fetched,
+    inserted_count,
+    duplicate_count,
+    failed_count,
+    previous_watermark_id,
+    new_watermark_id
+FROM moodle_log_ingestion_runs
+ORDER BY started_at DESC, id DESC
+LIMIT 10;
+```
