@@ -45,3 +45,17 @@ sources:
           - name: event_time
             tests:
               - not_null
+
+      - name: raw_ueh_lms_course_enrollments
+        description: "Dữ liệu raw về trạng thái đăng ký khóa UEH LMS Entrepreneurship từ hệ thống bên thứ ba."
+        columns:
+          - name: id
+            tests:
+              - not_null
+              - unique
+          - name: external_course_key
+            tests:
+              - not_null
+          - name: email
+            tests:
+              - not_null

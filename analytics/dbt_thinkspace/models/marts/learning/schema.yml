@@ -1,0 +1,352 @@
+version: 2
+
+models:
+  - name: gold_registered_user_learning_summary
+    description: "Một dòng đại diện cho một thí sinh đăng ký và trạng thái học tập hiện tại của thí sinh đó."
+    columns:
+      - name: registration_id
+        description: "Khóa đăng ký từ bảng registrations."
+        tests:
+          - not_null
+          - unique
+      - name: email
+        description: "Email thí sinh đã chuẩn hóa."
+        tests:
+          - not_null
+          - unique
+      - name: current_learning_status
+        description: "Trạng thái học tập tổng hợp cho dashboard."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - not_started
+                  - active
+                  - inactive
+                  - submitted
+      - name: learning_event_count
+        description: "Tổng số event học tập đã map được cho thí sinh."
+        tests:
+          - not_null
+      - name: access_event_count
+        description: "Số event truy cập/xem nội dung."
+        tests:
+          - not_null
+      - name: submission_final_event_count
+        description: "Số event nộp bài/hoàn thành cuối cùng."
+        tests:
+          - not_null
+  - name: gold_project_learning_summary
+    description: "Một dòng đại diện cho một dự án, gồm dự án đăng ký theo đội và dự án cá nhân."
+    columns:
+      - name: project_key
+        description: "Khóa dự án đã chuẩn hóa. Đội dùng team_name_key, cá nhân dùng email."
+        tests:
+          - not_null
+          - unique
+      - name: project_name
+        description: "Tên hiển thị của dự án."
+        tests:
+          - not_null
+      - name: project_type
+        description: "Loại dự án: team hoặc individual."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - team
+                  - individual
+      - name: registered_users
+        description: "Số thí sinh đăng ký thuộc dự án."
+        tests:
+          - not_null
+      - name: current_project_learning_status
+        description: "Trạng thái học tập tổng hợp của dự án."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - not_started
+                  - active
+                  - inactive
+                  - submitted
+  - name: gold_milestone_traction_summary
+    description: "Một dòng đại diện cho một milestone quan trọng và traction học tập/nộp bài của milestone đó."
+    columns:
+      - name: display_order
+        description: "Thứ tự hiển thị milestone trên dashboard."
+        tests:
+          - not_null
+          - unique
+      - name: milestone_code
+        description: "Tên ngắn của milestone."
+        tests:
+          - not_null
+      - name: guideline_module_id
+        description: "Moodle course module id của guideline milestone."
+        tests:
+          - not_null
+      - name: submission_module_id
+        description: "Moodle course module id của activity nộp bài milestone."
+        tests:
+          - not_null
+      - name: guideline_view_count
+        description: "Tổng lượt xem guideline của milestone."
+        tests:
+          - not_null
+      - name: guideline_user_count
+        description: "Số user duy nhất đã xem guideline của milestone."
+        tests:
+          - not_null
+      - name: submission_done_count
+        description: "Tổng số log nộp bài hoàn tất của milestone."
+        tests:
+          - not_null
+      - name: submission_done_project_count
+        description: "Số dự án duy nhất đã nộp bài milestone."
+        tests:
+          - not_null
+  - name: dim_moodle_course_activities
+    description: "Dimension mô tả các activity/module Moodle đã xuất hiện trong log."
+    columns:
+      - name: moodle_course_module_id
+        tests:
+          - not_null
+          - unique
+      - name: activity_type_key
+        tests:
+          - not_null
+      - name: activity_name_key
+        tests:
+          - not_null
+  - name: gold_user_learning_summary
+    description: "Một dòng đại diện cho một Moodle participant đã map identity, bao gồm cả user không thuộc registrations."
+    columns:
+      - name: participant_id
+        tests:
+          - not_null
+          - unique
+      - name: email
+        tests:
+          - not_null
+      - name: current_learning_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - not_started
+                  - active
+                  - inactive
+                  - submitted
+  - name: gold_team_learning_summary
+    description: "Một dòng đại diện cho một dự án đăng ký theo đội."
+    columns:
+      - name: team_name_key
+        tests:
+          - not_null
+          - unique
+      - name: team_name
+        tests:
+          - not_null
+      - name: current_team_learning_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - not_started
+                  - active
+                  - inactive
+                  - submitted
+  - name: gold_individual_learning_summary
+    description: "Một dòng đại diện cho một dự án cá nhân."
+    columns:
+      - name: registration_id
+        tests:
+          - not_null
+          - unique
+      - name: email
+        tests:
+          - not_null
+          - unique
+      - name: current_learning_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - not_started
+                  - active
+                  - inactive
+                  - submitted
+  - name: gold_daily_learning_interactions
+    description: "Một dòng đại diện cho tổng tương tác học tập theo ngày."
+    columns:
+      - name: event_date
+        tests:
+          - not_null
+          - unique
+      - name: total_interactions
+        tests:
+          - not_null
+      - name: active_users
+        tests:
+          - not_null
+  - name: gold_key_activity_spotlights
+    description: "Một dòng đại diện cho một hoạt động trọng yếu cần theo dõi trên dashboard."
+    columns:
+      - name: spotlight_key
+        tests:
+          - not_null
+          - unique
+      - name: display_order
+        tests:
+          - not_null
+          - unique
+      - name: unique_viewers
+        tests:
+          - not_null
+      - name: viewer_rate
+        tests:
+          - not_null
+  - name: gold_pre_program_gate_summary
+    description: "Một dòng tóm tắt trạng thái mở khóa qua Pre-Program Survey."
+    columns:
+      - name: summary_id
+        tests:
+          - not_null
+          - unique
+      - name: total_registered_users
+        tests:
+          - not_null
+  - name: gold_foundation_course_summary
+    description: "Một dòng tóm tắt trạng thái guideline/certificate của khóa nền tảng FMC3."
+    columns:
+      - name: summary_id
+        tests:
+          - not_null
+          - unique
+      - name: total_registered_users
+        tests:
+          - not_null
+  - name: gold_ueh_lms_entrepreneurship_enrollment_summary
+    description: "Một dòng tóm tắt tỷ lệ thí sinh Sandbox đã đăng ký khóa UEH LMS Entrepreneurship."
+    columns:
+      - name: summary_id
+        tests:
+          - not_null
+          - unique
+      - name: total_registered_users
+        tests:
+          - not_null
+      - name: enrolled_registered_users
+        tests:
+          - not_null
+  - name: gold_activity_type_summary
+    description: "Một dòng đại diện cho một loại activity Moodle và tổng tương tác tương ứng."
+    columns:
+      - name: activity_type
+        tests:
+          - not_null
+          - unique
+      - name: access_event_count
+        tests:
+          - not_null
+  - name: gold_submission_activities_summary
+    description: "Một dòng đại diện cho một activity nộp bài trên Moodle."
+    columns:
+      - name: moodle_course_module_id
+        tests:
+          - not_null
+          - unique
+      - name: activity_name
+        tests:
+          - not_null
+  - name: gold_top_viewed_activities
+    description: "Một dòng đại diện cho một activity Moodle có tương tác xem từ thí sinh đăng ký."
+    columns:
+      - name: moodle_course_module_id
+        tests:
+          - not_null
+          - unique
+      - name: activity_name
+        tests:
+          - not_null
+      - name: access_event_count
+        tests:
+          - not_null
+      - name: unique_viewers
+        tests:
+          - not_null
+  - name: gold_low_attention_activities
+    description: "Một dòng đại diện cho một learning material có mức độ chú ý thấp hoặc chưa có người xem."
+    columns:
+      - name: moodle_course_module_id
+        tests:
+          - not_null
+          - unique
+      - name: activity_name
+        tests:
+          - not_null
+      - name: access_event_count
+        tests:
+          - not_null
+      - name: unique_viewers
+        tests:
+          - not_null
+  - name: gold_recent_submissions
+    description: "Một dòng đại diện cho một sự kiện nộp bài hoàn tất gần đây của thí sinh đăng ký."
+    columns:
+      - name: bronze_event_id
+        tests:
+          - not_null
+          - unique
+      - name: submitted_at
+        tests:
+          - not_null
+      - name: email
+        tests:
+          - not_null
+  - name: gold_submitted_projects
+    description: "Một dòng đại diện cho một dự án đã có ít nhất một log nộp bài hoàn tất."
+    columns:
+      - name: project_key
+        tests:
+          - not_null
+          - unique
+      - name: project_name
+        tests:
+          - not_null
+      - name: project_type
+        tests:
+          - not_null
+  - name: gold_learning_activity_detail
+    description: "Một dòng đại diện cho một thí sinh đăng ký trong một activity Moodle đã có log."
+    columns:
+      - name: activity_detail_key
+        tests:
+          - not_null
+          - unique
+      - name: email
+        tests:
+          - not_null
+      - name: moodle_course_module_id
+        tests:
+          - not_null
+      - name: event_count
+        tests:
+          - not_null
+  - name: gold_ueh_lms_entrepreneurship_enrollment_detail
+    description: "Một dòng đại diện cho một thí sinh Sandbox đã match email với danh sách đăng ký khóa UEH LMS Entrepreneurship."
+    columns:
+      - name: email
+        tests:
+          - not_null
+          - unique
+      - name: full_name
+        tests:
+          - not_null

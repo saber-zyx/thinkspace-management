@@ -22,3 +22,7 @@ models:
       +materialized: view
     intermediate:
       +materialized: view
+    silver:
+      +materialized: view
+    marts:
+      +materialized: view

@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: silver_moodle_learning_events
+    description: "Một dòng đại diện cho một Moodle learning event đã được map với danh tính participant/registration khi có thể."
+    columns:
+      - name: bronze_event_id
+        description: "Khóa event từ bảng bronze_moodle_log_events."
+        tests:
+          - not_null
+          - unique
+      - name: event_time
+        description: "Thời điểm Moodle ghi nhận event."
+        tests:
+          - not_null
+      - name: event_date
+        description: "Ngày của event, dùng cho phân tích nhịp tương tác theo ngày."
+        tests:
+          - not_null
+      - name: moodle_user_id
+        description: "ID user trong Moodle log."
+        tests:
+          - not_null
+      - name: event_category
+        description: "Nhóm event đã canonical hóa ở bronze."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - learning
+      - name: progress_signal_type
+        description: "Nhãn tín hiệu tiến độ học tập dùng cho dashboard."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - access
+                  - submission_work
+                  - submission_final
+                  - other_learning

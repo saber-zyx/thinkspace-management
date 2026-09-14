@@ -13,6 +13,20 @@ from src.app.services.moodle_log_service import import_moodle_log_csv
 router = APIRouter(prefix="/api/v1/moodle-logs", tags=["Moodle Logs"])
 
 
+def use_analytics_schema_if_available(db: Session) -> str:
+    """Ưu tiên schema analytics của dbt, fallback về public nếu dbt chưa chạy."""
+    if db.bind is None or db.bind.dialect.name != "postgresql":
+        return "public"
+
+    analytics_ready = db.execute(
+        text("SELECT to_regclass('analytics.silver_moodle_learning_events')")
+    ).scalar()
+    if analytics_ready:
+        db.execute(text("SELECT set_config('search_path', 'analytics, public', true)"))
+        return "analytics"
+    return "public"
+
+
 @router.post("/import-csv")
 async def import_moodle_logs_csv(
     file: UploadFile = File(...),
@@ -68,6 +82,7 @@ def run_moodle_log_live_ingestion_once(db: Session = Depends(get_db)):
 
 @router.get("/silver-summary")
 def get_silver_moodle_learning_summary(db: Session = Depends(get_db)):
+    use_analytics_schema_if_available(db)
     summary = db.execute(
         text(
             """
@@ -106,6 +121,7 @@ def get_silver_moodle_learning_summary(db: Session = Depends(get_db)):
 
 @router.get("/activity-dim-summary")
 def get_moodle_activity_dim_summary(db: Session = Depends(get_db)):
+    use_analytics_schema_if_available(db)
     summary = db.execute(
         text(
             """
@@ -155,6 +171,7 @@ def get_moodle_activity_dim_summary(db: Session = Depends(get_db)):
 
 @router.get("/gold-user-summary")
 def get_gold_user_learning_summary(db: Session = Depends(get_db)):
+    use_analytics_schema_if_available(db)
     summary = db.execute(
         text(
             """
@@ -223,6 +240,7 @@ def get_gold_user_learning_summary(db: Session = Depends(get_db)):
 
 @router.get("/gold-registered-user-summary")
 def get_gold_registered_user_learning_summary(db: Session = Depends(get_db)):
+    use_analytics_schema_if_available(db)
     summary = db.execute(
         text(
             """
@@ -312,6 +330,7 @@ def get_gold_registered_user_learning_summary(db: Session = Depends(get_db)):
 
 @router.get("/gold-team-summary")
 def get_gold_team_learning_summary(db: Session = Depends(get_db)):
+    use_analytics_schema_if_available(db)
     summary = db.execute(
         text(
             """
@@ -408,6 +427,7 @@ def get_gold_team_members(
     team_name_key: str = Query(..., min_length=1),
     db: Session = Depends(get_db),
 ):
+    use_analytics_schema_if_available(db)
     team = db.execute(
         text(
             """
@@ -493,6 +513,7 @@ def get_gold_team_members(
 
 @router.get("/gold-individual-summary")
 def get_gold_individual_learning_summary(db: Session = Depends(get_db)):
+    use_analytics_schema_if_available(db)
     summary = db.execute(
         text(
             """
@@ -588,6 +609,7 @@ def get_gold_individual_learning_summary(db: Session = Depends(get_db)):
 
 @router.get("/learning-dashboard-overview")
 def get_learning_dashboard_overview(db: Session = Depends(get_db)):
+    data_schema = use_analytics_schema_if_available(db)
     registered_summary = db.execute(
         text(
             """
@@ -632,38 +654,34 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
         )
     ).mappings().one()
 
-    team_project_count = int(team_summary["total_teams"] or 0)
-    individual_project_count = int(individual_summary["total_individuals"] or 0)
-    project_summary = {
-        "team_projects": team_project_count,
-        "individual_projects": individual_project_count,
-        "total_projects": team_project_count + individual_project_count,
-        "active_projects": int(team_summary["active_teams"] or 0)
-        + int(individual_summary["accessed_individuals"] or 0),
-        "not_started_projects": int(team_summary["not_started_teams"] or 0)
-        + int(individual_summary["not_started_individuals"] or 0),
-        "submitted_projects": int(team_summary["submitted_teams"] or 0)
-        + int(individual_summary["submitted_individuals"] or 0),
-    }
+    project_summary = db.execute(
+        text(
+            """
+            SELECT
+                COUNT(*) AS total_projects,
+                COUNT(*) FILTER (WHERE project_type = 'team') AS team_projects,
+                COUNT(*) FILTER (WHERE project_type = 'individual') AS individual_projects,
+                COUNT(*) FILTER (WHERE has_any_access = TRUE) AS active_projects,
+                COUNT(*) FILTER (WHERE has_any_access = FALSE) AS not_started_projects,
+                COUNT(*) FILTER (WHERE has_any_submission = TRUE) AS submitted_projects
+            FROM gold_project_learning_summary
+            """
+        )
+    ).mappings().one()
 
     daily_interactions = db.execute(
         text(
             """
             SELECT
-                e.event_date,
-                COUNT(*) AS total_interactions,
-                COUNT(*) FILTER (WHERE e.is_access_event = TRUE) AS access_interactions,
-                COUNT(*) FILTER (WHERE e.progress_signal_type = 'submission_work') AS submission_work_interactions,
-                COUNT(*) FILTER (WHERE e.is_submission_final_event = TRUE) AS submitted_interactions,
-                COUNT(DISTINCT u.email) AS active_users,
-                COUNT(DISTINCT u.team_name_key) FILTER (
-                    WHERE u.team_name_key IS NOT NULL
-                ) AS active_teams
-            FROM silver_moodle_learning_events e
-            JOIN gold_registered_user_learning_summary u
-                ON LOWER(TRIM(e.email)) = u.email
-            GROUP BY e.event_date
-            ORDER BY e.event_date
+                event_date,
+                total_interactions,
+                access_interactions,
+                submission_work_interactions,
+                submitted_interactions,
+                active_users,
+                active_team_projects AS active_teams
+            FROM gold_daily_learning_interactions
+            ORDER BY event_date
             """
         )
     ).mappings().all()
@@ -671,95 +689,19 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
     milestone_traction_summary = db.execute(
         text(
             """
-            WITH milestone_map AS (
-                SELECT *
-                FROM (
-                    VALUES
-                        (1, 'Milestone 1', 'Start Here - Identify Your Market', 650, 651),
-                        (2, 'Milestone 2', 'Understand Your User', 653, 654),
-                        (3, 'Milestone 3', 'Coming up with the Problem Statement', 656, 657),
-                        (4, 'Milestone 4', 'Design Your Offering', 659, 660),
-                        (5, 'Milestone 5', 'Shape the Value', 662, 663),
-                        (6, 'Final Submission', 'Final Submission', 665, 666)
-                ) AS m(display_order, milestone_code, milestone_name, guideline_module_id, submission_module_id)
-            ),
-            registered_events AS (
-                SELECT
-                    e.*,
-                    u.full_name,
-                    u.email AS registered_email,
-                    u.team_name AS registered_team_name,
-                    COALESCE(u.team_name_key, u.email) AS project_key,
-                    COALESCE(NULLIF(u.team_name, ''), u.full_name) AS project_name
-                FROM silver_moodle_learning_events e
-                JOIN gold_registered_user_learning_summary u
-                    ON LOWER(TRIM(e.email)) = u.email
-            ),
-            submitted_projects AS (
-                SELECT
-                    m.display_order,
-                    e.project_key,
-                    MAX(e.project_name) AS project_name,
-                    MAX(e.registered_team_name) AS team_name,
-                    COUNT(*) AS submitted_count,
-                    COUNT(DISTINCT e.registered_email) AS submitted_user_count,
-                    MAX(e.event_time) AS latest_submitted_at
-                FROM milestone_map m
-                JOIN registered_events e
-                    ON e.moodle_course_module_id = m.submission_module_id
-                WHERE e.is_submission_final_event = TRUE
-                GROUP BY m.display_order, e.project_key
-            )
             SELECT
-                m.display_order,
-                m.milestone_code,
-                m.milestone_name,
-                m.guideline_module_id,
-                m.submission_module_id,
-                COUNT(*) FILTER (
-                    WHERE e.moodle_course_module_id = m.guideline_module_id
-                      AND e.is_access_event = TRUE
-                ) AS guideline_view_count,
-                COUNT(DISTINCT e.email) FILTER (
-                    WHERE e.moodle_course_module_id = m.guideline_module_id
-                      AND e.is_access_event = TRUE
-                ) AS guideline_user_count,
-                COUNT(*) FILTER (
-                    WHERE e.moodle_course_module_id = m.submission_module_id
-                      AND e.is_submission_final_event = TRUE
-                ) AS submission_done_count,
-                COUNT(DISTINCT e.project_key) FILTER (
-                    WHERE e.moodle_course_module_id = m.submission_module_id
-                      AND e.is_submission_final_event = TRUE
-                ) AS submission_done_project_count,
-                COALESCE((
-                    SELECT JSON_AGG(
-                        JSON_BUILD_OBJECT(
-                            'project_key', sp.project_key,
-                            'project_name', sp.project_name,
-                            'team_name', sp.team_name,
-                            'submitted_count', sp.submitted_count,
-                            'submitted_user_count', sp.submitted_user_count,
-                            'latest_submitted_at', sp.latest_submitted_at
-                        )
-                        ORDER BY sp.latest_submitted_at DESC, sp.project_name
-                    )
-                    FROM submitted_projects sp
-                    WHERE sp.display_order = m.display_order
-                ), '[]'::JSON) AS submitted_projects
-            FROM milestone_map m
-            LEFT JOIN registered_events e
-                ON e.moodle_course_module_id IN (
-                    m.guideline_module_id,
-                    m.submission_module_id
-                )
-            GROUP BY
-                m.display_order,
-                m.milestone_code,
-                m.milestone_name,
-                m.guideline_module_id,
-                m.submission_module_id
-            ORDER BY m.display_order
+                display_order,
+                milestone_code,
+                milestone_name,
+                guideline_module_id,
+                submission_module_id,
+                guideline_view_count,
+                guideline_user_count,
+                submission_done_count,
+                submission_done_project_count,
+                submitted_projects
+            FROM gold_milestone_traction_summary
+            ORDER BY display_order
             """
         )
     ).mappings().all()
@@ -767,120 +709,26 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
     key_activity_spotlights = db.execute(
         text(
             """
-            WITH target_activities AS (
-                SELECT *
-                FROM (
-                    VALUES
-                        (1, 'lms_guideline', 'UEH LMS Registration Guideline (FMC3)', 714, ARRAY[714]::INTEGER[]),
-                        (2, 'pre_program_survey_page', 'Pre-Program Survey', 707, ARRAY[707]::INTEGER[]),
-                        (3, 'certificate_submission', 'Certificate Submission', 716, ARRAY[716]::INTEGER[])
-                ) AS t(display_order, spotlight_key, spotlight_label, moodle_course_module_id, tracked_module_ids)
-            ),
-            registered_total AS (
-                SELECT COUNT(*) AS total_registered_users
-                FROM gold_registered_user_learning_summary
-            ),
-            activity_events AS (
-                SELECT
-                    t.display_order,
-                    t.spotlight_key,
-                    t.spotlight_label,
-                    t.moodle_course_module_id,
-                    COALESCE(MAX(d.activity_type), 'unknown') AS activity_type,
-                    CASE
-                        WHEN t.spotlight_key = 'pre_program_survey_page'
-                            THEN t.spotlight_label
-                        ELSE COALESCE(MAX(d.activity_name), t.spotlight_label)
-                    END AS activity_name,
-                    COALESCE((
-                        SELECT SUM(scope_d.total_event_rows)
-                        FROM dim_moodle_course_activities scope_d
-                        WHERE scope_d.moodle_course_module_id = ANY(t.tracked_module_ids)
-                    ), 0) AS total_moodle_log_rows,
-                    COALESCE((
-                        SELECT SUM(scope_d.learning_event_rows)
-                        FROM dim_moodle_course_activities scope_d
-                        WHERE scope_d.moodle_course_module_id = ANY(t.tracked_module_ids)
-                    ), 0) AS total_learning_log_rows,
-                    COALESCE((
-                        SELECT COUNT(DISTINCT scope_e.email)
-                        FROM silver_moodle_learning_events scope_e
-                        WHERE scope_e.moodle_course_module_id = ANY(t.tracked_module_ids)
-                    ), 0) AS total_learning_log_users,
-                    COALESCE((
-                        SELECT COUNT(scope_u.email)
-                        FROM silver_moodle_learning_events scope_e
-                        JOIN gold_registered_user_learning_summary scope_u
-                            ON LOWER(TRIM(scope_e.email)) = scope_u.email
-                        WHERE scope_e.moodle_course_module_id = ANY(t.tracked_module_ids)
-                          AND scope_e.is_access_event = TRUE
-                    ), 0) AS access_event_count,
-                    COALESCE((
-                        SELECT COUNT(DISTINCT scope_u.email)
-                        FROM silver_moodle_learning_events scope_e
-                        JOIN gold_registered_user_learning_summary scope_u
-                            ON LOWER(TRIM(scope_e.email)) = scope_u.email
-                        WHERE scope_e.moodle_course_module_id = ANY(t.tracked_module_ids)
-                          AND scope_e.is_access_event = TRUE
-                    ), 0) AS unique_viewers,
-                    COALESCE((
-                        SELECT COUNT(scope_u.email)
-                        FROM silver_moodle_learning_events scope_e
-                        JOIN gold_registered_user_learning_summary scope_u
-                            ON LOWER(TRIM(scope_e.email)) = scope_u.email
-                        WHERE scope_e.moodle_course_module_id = ANY(t.tracked_module_ids)
-                          AND scope_e.progress_signal_type = 'submission_work'
-                    ), 0) AS submission_work_event_count,
-                    COALESCE((
-                        SELECT COUNT(scope_u.email)
-                        FROM silver_moodle_learning_events scope_e
-                        JOIN gold_registered_user_learning_summary scope_u
-                            ON LOWER(TRIM(scope_e.email)) = scope_u.email
-                        WHERE scope_e.moodle_course_module_id = ANY(t.tracked_module_ids)
-                          AND scope_e.is_submission_final_event = TRUE
-                    ), 0) AS submission_final_event_count,
-                    COALESCE((
-                        SELECT COUNT(DISTINCT scope_u.email)
-                        FROM silver_moodle_learning_events scope_e
-                        JOIN gold_registered_user_learning_summary scope_u
-                            ON LOWER(TRIM(scope_e.email)) = scope_u.email
-                        WHERE scope_e.moodle_course_module_id = ANY(t.tracked_module_ids)
-                          AND scope_e.is_submission_final_event = TRUE
-                    ), 0) AS unique_submitters,
-                    (
-                        SELECT MAX(scope_e.event_time)
-                        FROM silver_moodle_learning_events scope_e
-                        JOIN gold_registered_user_learning_summary scope_u
-                            ON LOWER(TRIM(scope_e.email)) = scope_u.email
-                        WHERE scope_e.moodle_course_module_id = ANY(t.tracked_module_ids)
-                    ) AS last_interaction_at,
-                    (
-                        SELECT MAX(scope_d.last_seen_at)
-                        FROM dim_moodle_course_activities scope_d
-                        WHERE scope_d.moodle_course_module_id = ANY(t.tracked_module_ids)
-                    ) AS last_moodle_log_at
-                FROM target_activities t
-                LEFT JOIN dim_moodle_course_activities d
-                    ON d.moodle_course_module_id = t.moodle_course_module_id
-                GROUP BY
-                    t.display_order,
-                    t.spotlight_key,
-                    t.spotlight_label,
-                    t.moodle_course_module_id,
-                    t.tracked_module_ids
-            )
             SELECT
-                a.*,
-                ROUND(
-                    CASE
-                        WHEN r.total_registered_users = 0 THEN 0
-                        ELSE a.unique_viewers::NUMERIC * 100 / r.total_registered_users
-                    END,
-                    1
-                ) AS viewer_rate
-            FROM activity_events a
-            CROSS JOIN registered_total r
-            ORDER BY a.display_order
+                display_order,
+                spotlight_key,
+                spotlight_label,
+                moodle_course_module_id,
+                activity_type,
+                activity_name,
+                total_moodle_log_rows,
+                total_learning_log_rows,
+                total_learning_log_users,
+                access_event_count,
+                unique_viewers,
+                submission_work_event_count,
+                submission_final_event_count,
+                unique_submitters,
+                last_interaction_at,
+                last_moodle_log_at,
+                viewer_rate
+            FROM gold_key_activity_spotlights
+            ORDER BY display_order
             """
         )
     ).mappings().all()
@@ -888,36 +736,12 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
     pre_program_gate_summary = db.execute(
         text(
             """
-            WITH registered AS (
-                SELECT email
-                FROM gold_registered_user_learning_summary
-            ),
-            user_flags AS (
-                SELECT
-                    u.email,
-                    COUNT(*) FILTER (
-                        WHERE e.moodle_course_module_id = 707
-                          AND e.is_access_event = TRUE
-                    ) > 0 AS viewed_survey_page,
-                    COUNT(*) FILTER (
-                        WHERE e.is_access_event = TRUE
-                          AND e.moodle_course_module_id IS NOT NULL
-                          AND e.moodle_course_module_id NOT IN (707, 709)
-                    ) > 0 AS accessed_any_content_after_survey
-                FROM registered u
-                LEFT JOIN silver_moodle_learning_events e
-                    ON LOWER(TRIM(e.email)) = u.email
-                GROUP BY u.email
-            )
             SELECT
-                COUNT(*) AS total_registered_users,
-                COUNT(*) FILTER (WHERE viewed_survey_page = TRUE) AS survey_page_viewers,
-                COUNT(*) FILTER (WHERE accessed_any_content_after_survey = TRUE) AS post_survey_content_users,
-                COUNT(*) FILTER (
-                    WHERE viewed_survey_page = TRUE
-                      AND accessed_any_content_after_survey = FALSE
-                ) AS viewed_survey_but_no_later_content
-            FROM user_flags
+                total_registered_users,
+                survey_page_viewers,
+                post_survey_content_users,
+                viewed_survey_but_no_later_content
+            FROM gold_pre_program_gate_summary
             """
         )
     ).mappings().one()
@@ -925,48 +749,14 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
     foundation_course_summary = db.execute(
         text(
             """
-            WITH registered AS (
-                SELECT email, team_name_key
-                FROM gold_registered_user_learning_summary
-            ),
-            user_flags AS (
-                SELECT
-                    u.email,
-                    u.team_name_key,
-                    COUNT(*) FILTER (
-                        WHERE e.moodle_course_module_id = 714
-                          AND e.is_access_event = TRUE
-                    ) > 0 AS viewed_fmc3_lms_guideline,
-                    COUNT(*) FILTER (
-                        WHERE e.moodle_course_module_id = 716
-                          AND e.is_access_event = TRUE
-                    ) > 0 AS accessed_foundation_submission,
-                    COUNT(*) FILTER (
-                        WHERE e.moodle_course_module_id = 716
-                          AND e.is_submission_final_event = TRUE
-                    ) > 0 AS submitted_foundation_certificate
-                FROM registered u
-                LEFT JOIN silver_moodle_learning_events e
-                    ON LOWER(TRIM(e.email)) = u.email
-                GROUP BY u.email, u.team_name_key
-            )
             SELECT
-                COUNT(*) AS total_registered_users,
-                COUNT(*) FILTER (WHERE viewed_fmc3_lms_guideline = TRUE) AS fmc3_guideline_viewers,
-                COUNT(*) FILTER (WHERE submitted_foundation_certificate = TRUE) AS foundation_submission_users,
-                COUNT(DISTINCT team_name_key) FILTER (
-                    WHERE submitted_foundation_certificate = TRUE
-                      AND team_name_key IS NOT NULL
-                ) AS foundation_active_teams,
-                COUNT(*) FILTER (
-                    WHERE viewed_fmc3_lms_guideline = FALSE
-                      AND accessed_foundation_submission = TRUE
-                ) AS skipped_fmc3_guideline_but_accessed_content,
-                COUNT(*) FILTER (
-                    WHERE viewed_fmc3_lms_guideline = TRUE
-                      AND accessed_foundation_submission = FALSE
-                ) AS viewed_fmc3_guideline_but_no_content_access
-            FROM user_flags
+                total_registered_users,
+                fmc3_guideline_viewers,
+                foundation_submission_users,
+                foundation_active_teams,
+                skipped_fmc3_guideline_but_accessed_content,
+                viewed_fmc3_guideline_but_no_content_access
+            FROM gold_foundation_course_summary
             """
         )
     ).mappings().one()
@@ -974,36 +764,12 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
     ueh_lms_entrepreneurship_enrollment_summary = db.execute(
         text(
             """
-            WITH registered AS (
-                SELECT
-                    LOWER(TRIM(email)) AS email,
-                    COUNT(*) AS registration_rows
-                FROM registrations
-                WHERE NULLIF(TRIM(email), '') IS NOT NULL
-                GROUP BY LOWER(TRIM(email))
-            ),
-            enrolled AS (
-                SELECT DISTINCT LOWER(TRIM(email)) AS email
-                FROM raw_ueh_lms_course_enrollments
-                WHERE external_course_key = 'fmc3_entrepreneurship'
-                  AND enrollment_status IN ('enrolled', 'active')
-                  AND NULLIF(TRIM(email), '') IS NOT NULL
-            )
             SELECT
-                COALESCE((SELECT SUM(registration_rows) FROM registered), 0) AS total_registered_users,
-                COUNT(r.email) FILTER (WHERE e.email IS NOT NULL) AS enrolled_registered_users,
-                COALESCE((SELECT COUNT(*) FROM enrolled), 0) AS source_enrolled_emails,
-                ROUND(
-                    CASE
-                        WHEN COALESCE((SELECT SUM(registration_rows) FROM registered), 0) = 0 THEN 0
-                        ELSE COUNT(r.email) FILTER (WHERE e.email IS NOT NULL)::NUMERIC * 100
-                            / COALESCE((SELECT SUM(registration_rows) FROM registered), 0)
-                    END,
-                    1
-                ) AS enrollment_rate
-            FROM registered r
-            LEFT JOIN enrolled e
-                ON r.email = e.email
+                total_registered_users,
+                enrolled_registered_users,
+                source_enrolled_emails,
+                enrollment_rate
+            FROM gold_ueh_lms_entrepreneurship_enrollment_summary
             """
         )
     ).mappings().one()
@@ -1012,24 +778,13 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
         text(
             """
             SELECT
-                COALESCE(e.activity_type, 'unknown') AS activity_type,
-                COUNT(DISTINCT e.moodle_course_module_id) FILTER (
-                    WHERE e.moodle_course_module_id IS NOT NULL
-                ) AS activity_count,
-                COUNT(*) FILTER (WHERE e.is_access_event = TRUE) AS access_event_count,
-                COUNT(DISTINCT u.email) FILTER (
-                    WHERE e.is_access_event = TRUE
-                ) AS unique_viewers,
-                COUNT(*) FILTER (
-                    WHERE e.is_submission_final_event = TRUE
-                ) AS submission_final_event_count,
-                COUNT(DISTINCT u.email) FILTER (
-                    WHERE e.is_submission_final_event = TRUE
-                ) AS unique_submitters
-            FROM silver_moodle_learning_events e
-            JOIN gold_registered_user_learning_summary u
-                ON LOWER(TRIM(e.email)) = u.email
-            GROUP BY COALESCE(e.activity_type, 'unknown')
+                activity_type,
+                activity_count,
+                access_event_count,
+                unique_viewers,
+                submission_final_event_count,
+                unique_submitters
+            FROM gold_activity_type_summary
             ORDER BY access_event_count DESC, activity_type
             """
         )
@@ -1039,23 +794,13 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
         text(
             """
             SELECT
-                e.moodle_course_module_id,
-                COALESCE(e.activity_type, 'unknown') AS activity_type,
-                e.activity_name,
-                COUNT(*) FILTER (WHERE e.is_access_event = TRUE) AS access_event_count,
-                COUNT(DISTINCT u.email) FILTER (
-                    WHERE e.is_access_event = TRUE
-                ) AS unique_viewers,
-                MAX(e.event_time) AS last_access_at
-            FROM silver_moodle_learning_events e
-            JOIN gold_registered_user_learning_summary u
-                ON LOWER(TRIM(e.email)) = u.email
-            WHERE e.moodle_course_module_id IS NOT NULL
-              AND e.activity_name IS NOT NULL
-            GROUP BY
-                e.moodle_course_module_id,
-                COALESCE(e.activity_type, 'unknown'),
-                e.activity_name
+                moodle_course_module_id,
+                activity_type,
+                activity_name,
+                access_event_count,
+                unique_viewers,
+                last_access_at
+            FROM gold_top_viewed_activities
             ORDER BY unique_viewers DESC, access_event_count DESC, activity_name
             LIMIT 10
             """
@@ -1066,27 +811,13 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
         text(
             """
             SELECT
-                d.moodle_course_module_id,
-                COALESCE(d.activity_type, 'unknown') AS activity_type,
-                d.activity_name,
-                COUNT(u.email) FILTER (WHERE e.is_access_event = TRUE) AS access_event_count,
-                COUNT(DISTINCT u.email) FILTER (
-                    WHERE e.is_access_event = TRUE
-                ) AS unique_viewers,
-                MAX(e.event_time) FILTER (
-                    WHERE e.is_access_event = TRUE
-                      AND u.email IS NOT NULL
-                ) AS last_access_at
-            FROM dim_moodle_course_activities d
-            LEFT JOIN silver_moodle_learning_events e
-                ON d.moodle_course_module_id = e.moodle_course_module_id
-            LEFT JOIN gold_registered_user_learning_summary u
-                ON LOWER(TRIM(e.email)) = u.email
-            WHERE d.is_learning_material = TRUE
-            GROUP BY
-                d.moodle_course_module_id,
-                COALESCE(d.activity_type, 'unknown'),
-                d.activity_name
+                moodle_course_module_id,
+                activity_type,
+                activity_name,
+                access_event_count,
+                unique_viewers,
+                last_access_at
+            FROM gold_low_attention_activities
             ORDER BY unique_viewers ASC, access_event_count ASC, activity_name
             LIMIT 10
             """
@@ -1097,29 +828,14 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
         text(
             """
             SELECT
-                d.moodle_course_module_id,
-                d.activity_name,
-                COUNT(DISTINCT u.email) FILTER (
-                    WHERE e.is_access_event = TRUE
-                ) AS unique_viewers,
-                COUNT(DISTINCT u.email) FILTER (
-                    WHERE e.is_submission_final_event = TRUE
-                ) AS unique_submitters,
-                COUNT(u.email) FILTER (
-                    WHERE e.is_submission_final_event = TRUE
-                ) AS submission_final_event_count,
-                MAX(e.event_time) FILTER (
-                    WHERE e.is_submission_final_event = TRUE
-                      AND u.email IS NOT NULL
-                ) AS latest_submission_at
-            FROM dim_moodle_course_activities d
-            LEFT JOIN silver_moodle_learning_events e
-                ON d.moodle_course_module_id = e.moodle_course_module_id
-            LEFT JOIN gold_registered_user_learning_summary u
-                ON LOWER(TRIM(e.email)) = u.email
-            WHERE d.is_submission_activity = TRUE
-            GROUP BY d.moodle_course_module_id, d.activity_name
-            ORDER BY unique_submitters DESC, submission_final_event_count DESC, d.activity_name
+                moodle_course_module_id,
+                activity_name,
+                unique_viewers,
+                unique_submitters,
+                submission_final_event_count,
+                latest_submission_at
+            FROM gold_submission_activities_summary
+            ORDER BY unique_submitters DESC, submission_final_event_count DESC, activity_name
             """
         )
     ).mappings().all()
@@ -1128,16 +844,13 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
         text(
             """
             SELECT
-                e.event_time AS submitted_at,
-                e.activity_name,
-                u.full_name,
-                u.email,
-                u.team_name
-            FROM silver_moodle_learning_events e
-            JOIN gold_registered_user_learning_summary u
-                ON LOWER(TRIM(e.email)) = u.email
-            WHERE e.is_submission_final_event = TRUE
-            ORDER BY e.event_time DESC
+                submitted_at,
+                activity_name,
+                full_name,
+                email,
+                team_name
+            FROM gold_recent_submissions
+            ORDER BY submitted_at DESC
             LIMIT 20
             """
         )
@@ -1153,8 +866,7 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
                 submitted_activity_count,
                 submitted_activity_names,
                 latest_submission_at
-            FROM gold_team_learning_summary
-            WHERE has_any_submission = TRUE
+            FROM gold_submitted_projects
             ORDER BY latest_submission_at DESC, team_name
             """
         )
@@ -1178,6 +890,13 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
                 f"{int(item['unique_viewers'] or 0)} người xem, "
                 f"{int(item['submission_final_event_count'] or 0)} lượt nộp bài"
             )
+        elif item["spotlight_key"] == "ueh_lms_entrepreneurship_enrollment":
+            primary_count = int(item["unique_viewers"] or 0)
+            primary_rate = float(item["viewer_rate"] or 0)
+            primary_detail = (
+                f"{primary_count}/{total_registered_users} th\u00ed sinh \u0111\u00e3 \u0111\u0103ng k\u00fd kh\u00f3a entrepreneurship"
+            )
+            secondary_detail = ""
         else:
             primary_count = int(item["unique_viewers"] or 0)
             primary_rate = float(item["viewer_rate"] or 0)
@@ -1204,6 +923,7 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
         })
 
     return {
+        "data_schema": data_schema,
         "registered_summary": {
             "total_registered_users": registered_summary["total_registered_users"],
             "accessed_users": registered_summary["accessed_users"],
@@ -1281,40 +1001,16 @@ def get_learning_dashboard_overview(db: Session = Depends(get_db)):
 def get_ueh_lms_entrepreneurship_enrollments_detail(
     db: Session = Depends(get_db),
 ):
+    use_analytics_schema_if_available(db)
     summary = db.execute(
         text(
             """
-            WITH registered AS (
-                SELECT
-                    LOWER(TRIM(email)) AS email,
-                    COUNT(*) AS registration_rows
-                FROM registrations
-                WHERE NULLIF(TRIM(email), '') IS NOT NULL
-                GROUP BY LOWER(TRIM(email))
-            ),
-            enrolled AS (
-                SELECT DISTINCT LOWER(TRIM(email)) AS email
-                FROM raw_ueh_lms_course_enrollments
-                WHERE external_course_key = 'fmc3_entrepreneurship'
-                  AND enrollment_status IN ('enrolled', 'active')
-                  AND NULLIF(TRIM(email), '') IS NOT NULL
-            )
             SELECT
-                COALESCE((SELECT SUM(registration_rows) FROM registered), 0) AS total_registered_users,
-                COUNT(r.email) FILTER (WHERE e.email IS NOT NULL) AS enrolled_registered_users,
-                COALESCE((SELECT COUNT(*) FROM enrolled), 0) AS source_enrolled_emails,
-                CASE
-                    WHEN COALESCE((SELECT SUM(registration_rows) FROM registered), 0) = 0 THEN 0
-                    ELSE ROUND(
-                        COUNT(r.email) FILTER (WHERE e.email IS NOT NULL)::numeric
-                        / COALESCE((SELECT SUM(registration_rows) FROM registered), 0)::numeric
-                        * 100,
-                        1
-                    )
-                END AS enrollment_rate
-            FROM registered r
-            LEFT JOIN enrolled e
-                ON r.email = e.email
+                total_registered_users,
+                enrolled_registered_users,
+                source_enrolled_emails,
+                enrollment_rate
+            FROM gold_ueh_lms_entrepreneurship_enrollment_summary
             """
         )
     ).mappings().one()
@@ -1322,39 +1018,20 @@ def get_ueh_lms_entrepreneurship_enrollments_detail(
     users = db.execute(
         text(
             """
-            WITH latest_enrollment AS (
-                SELECT *
-                FROM (
-                    SELECT
-                        e.*,
-                        ROW_NUMBER() OVER (
-                            PARTITION BY LOWER(TRIM(e.email))
-                            ORDER BY e.loaded_at DESC, e.id DESC
-                        ) AS enrollment_rank
-                    FROM raw_ueh_lms_course_enrollments e
-                    WHERE e.external_course_key = 'fmc3_entrepreneurship'
-                      AND e.enrollment_status IN ('enrolled', 'active')
-                      AND NULLIF(TRIM(e.email), '') IS NOT NULL
-                ) ranked
-                WHERE enrollment_rank = 1
-            )
             SELECT
-                r.full_name,
-                LOWER(TRIM(r.email)) AS email,
-                r.role,
-                NULLIF(TRIM(r.team_name), '') AS team_name,
-                e.external_course_name,
-                e.enrollment_status,
-                e.enrolled_at,
-                e.loaded_at
-            FROM registrations r
-            JOIN latest_enrollment e
-                ON LOWER(TRIM(r.email)) = LOWER(TRIM(e.email))
-            WHERE NULLIF(TRIM(r.email), '') IS NOT NULL
+                full_name,
+                email,
+                role,
+                team_name,
+                external_course_name,
+                enrollment_status,
+                enrolled_at,
+                loaded_at
+            FROM gold_ueh_lms_entrepreneurship_enrollment_detail
             ORDER BY
-                NULLIF(TRIM(r.team_name), '') NULLS LAST,
-                r.full_name,
-                LOWER(TRIM(r.email))
+                team_name NULLS LAST,
+                full_name,
+                email
             """
         )
     ).mappings().all()
@@ -1377,6 +1054,7 @@ def get_team_activities_detail(
     team_name_key: str = Query(..., min_length=1),
     db: Session = Depends(get_db),
 ):
+    use_analytics_schema_if_available(db)
     team = db.execute(
         text(
             """
@@ -1432,23 +1110,20 @@ def get_team_activities_detail(
         text(
             """
             SELECT 
-                LOWER(TRIM(email)) AS email_key,
+                email_key,
                 moodle_course_module_id,
-                MAX(activity_name) AS activity_name,
-                MAX(activity_type) AS activity_type,
-                MIN(event_time) AS first_access_at,
-                MAX(event_time) AS last_access_at,
-                COUNT(*) AS event_count,
-                COUNT(*) FILTER (WHERE is_access_event = TRUE) AS access_event_count,
-                COUNT(*) FILTER (WHERE is_submission_event = TRUE) AS submission_event_count,
-                COUNT(*) FILTER (WHERE is_submission_final_event = TRUE) AS submission_final_event_count,
-                MAX(CASE WHEN is_submission_final_event = TRUE THEN 1 ELSE 0 END) AS has_submitted,
-                STRING_AGG(DISTINCT progress_signal_type, ', ' ORDER BY progress_signal_type) AS progress_signal_types
-            FROM silver_moodle_learning_events
-            WHERE team_name_key = :team_name_key 
-              AND moodle_course_module_id IS NOT NULL
-              AND activity_name IS NOT NULL
-            GROUP BY LOWER(TRIM(email)), moodle_course_module_id
+                activity_name,
+                activity_type,
+                first_access_at,
+                last_access_at,
+                event_count,
+                access_event_count,
+                submission_event_count,
+                submission_final_event_count,
+                has_submitted,
+                progress_signal_types
+            FROM gold_learning_activity_detail
+            WHERE team_name_key = :team_name_key
             ORDER BY last_access_at DESC
             """
         ),
@@ -1506,6 +1181,7 @@ def get_individual_activities_detail(
     email: str = Query(..., min_length=1),
     db: Session = Depends(get_db),
 ):
+    use_analytics_schema_if_available(db)
     email_key = email.lower().strip()
     user = db.execute(
         text(
@@ -1535,21 +1211,18 @@ def get_individual_activities_detail(
             """
             SELECT 
                 moodle_course_module_id,
-                MAX(activity_name) AS activity_name,
-                MAX(activity_type) AS activity_type,
-                MIN(event_time) AS first_access_at,
-                MAX(event_time) AS last_access_at,
-                COUNT(*) AS event_count,
-                COUNT(*) FILTER (WHERE is_access_event = TRUE) AS access_event_count,
-                COUNT(*) FILTER (WHERE is_submission_event = TRUE) AS submission_event_count,
-                COUNT(*) FILTER (WHERE is_submission_final_event = TRUE) AS submission_final_event_count,
-                MAX(CASE WHEN is_submission_final_event = TRUE THEN 1 ELSE 0 END) AS has_submitted,
-                STRING_AGG(DISTINCT progress_signal_type, ', ' ORDER BY progress_signal_type) AS progress_signal_types
-            FROM silver_moodle_learning_events
-            WHERE LOWER(TRIM(email)) = :email_key
-              AND moodle_course_module_id IS NOT NULL
-              AND activity_name IS NOT NULL
-            GROUP BY moodle_course_module_id
+                activity_name,
+                activity_type,
+                first_access_at,
+                last_access_at,
+                event_count,
+                access_event_count,
+                submission_event_count,
+                submission_final_event_count,
+                has_submitted,
+                progress_signal_types
+            FROM gold_learning_activity_detail
+            WHERE email_key = :email_key
             ORDER BY last_access_at DESC
             """
         ),

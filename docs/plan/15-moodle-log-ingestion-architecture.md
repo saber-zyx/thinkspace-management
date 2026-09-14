@@ -246,6 +246,96 @@ Trong pipeline này:
 - Script vòng lặp là scheduler tạm thời cho môi trường local.
 - Dashboard không cần biết log đến từ CSV hay live ingestion; dashboard chỉ đọc các lớp `silver/gold`.
 
+## Phương Án Không Có Quyền Database Moodle
+
+Khi không có quyền truy cập server/database Moodle, hướng thay thế là tự động hóa thao tác export log từ giao diện Moodle.
+
+Luồng:
+
+```text
+Moodle Reports > Logs
+  -> Playwright đăng nhập bằng tài khoản có quyền xem report
+  -> tải file log CSV/Excel
+  -> lưu vào data/incoming/moodle_logs
+  -> import qua API hiện có
+  -> raw/bronze/silver/gold
+  -> dashboard
+```
+
+Script chạy thử một lần:
+
+```powershell
+python scripts/export_moodle_logs_once.py
+```
+
+Chạy định kỳ ở localhost:
+
+```powershell
+.\scripts\run-moodle-ui-log-pipeline-loop.ps1 -IntervalMinutes 30
+```
+
+Chạy thử một vòng duy nhất:
+
+```powershell
+.\scripts\run-moodle-ui-log-pipeline-loop.ps1 -IntervalMinutes 30 -MaxRuns 1
+```
+
+Sau khi file log được import, pipeline local sẽ gọi:
+
+```powershell
+.\scripts\run-local-analytics-refresh.ps1
+```
+
+Script này đảm bảo database/app local chạy, chạy `dbt run`, chạy `dbt test`, rồi gọi API `learning-dashboard-overview` để xác nhận dashboard đang đọc schema `analytics`.
+
+Mặc định script chạy dbt ở chế độ gọn bằng `--quiet` để terminal không bị tràn log. Khi cần học hoặc debug chi tiết từng model dbt, dùng:
+
+```powershell
+.\scripts\run-local-analytics-refresh.ps1 -VerboseDbt
+```
+
+Mặc định script sẽ tự import file vừa tải vào API local:
+
+```text
+POST /api/v1/moodle-logs/import-csv
+```
+
+Nếu import thành công, file được chuyển sang:
+
+```text
+data/archive/moodle_logs
+```
+
+Nếu import thất bại, file được chuyển sang:
+
+```text
+data/failed/moodle_logs
+```
+
+Các biến cần điền trong `.env`:
+
+```text
+MOODLE_UI_BASE_URL
+MOODLE_UI_USERNAME
+MOODLE_UI_PASSWORD
+MOODLE_UI_LOGIN_PATH
+MOODLE_LOGS_PATH
+MOODLE_LOG_COURSE_ID
+MOODLE_LOG_EXPORT_FORMAT
+MOODLE_LOG_EXPORT_HEADLESS
+MOODLE_LOG_AUTO_IMPORT
+THINKSPACE_APP_BASE_URL
+```
+
+Lưu ý vận hành:
+
+- Đây là UI automation, không bền bằng API/database ingestion.
+- Không nên chạy mỗi 60 giây. Giai đoạn đầu nên chạy mỗi 30-60 phút.
+- Nếu Moodle đổi giao diện hoặc quyền export, script có thể cần cập nhật selector.
+- Password Moodle chỉ để trong `.env` local hoặc secret manager, không đưa vào Git.
+- Chống trùng vẫn do `event_hash` trong `bronze_moodle_log_events`, nên export/import lại cùng một log sẽ tăng `duplicate_count` thay vì nhân đôi dữ liệu dashboard.
+- Folder `data/` là vùng dữ liệu vận hành local và đã được bỏ qua khỏi Git.
+
 ## SQL Thực Hành Trong DBeaver
 
 Kiểm tra watermark hiện tại:

@@ -1,0 +1,36 @@
+version: 2
+
+models:
+  - name: stg_registrations
+    description: "Bảng staging chuẩn hóa dữ liệu đăng ký chương trình."
+    columns:
+      - name: registration_id
+        tests:
+          - not_null
+          - unique
+      - name: email
+        tests:
+          - not_null
+  - name: stg_moodle_participants
+    description: "Bảng staging chuẩn hóa dữ liệu Participants export từ Moodle."
+    columns:
+      - name: participant_id
+        tests:
+          - not_null
+          - unique
+      - name: email
+        tests:
+          - not_null
+  - name: stg_ueh_lms_course_enrollments
+    description: "Bảng staging chuẩn hóa dữ liệu đăng ký khóa UEH LMS Entrepreneurship."
+    columns:
+      - name: id
+        tests:
+          - not_null
+          - unique
+      - name: external_course_key
+        tests:
+          - not_null
+      - name: email
+        tests:
+          - not_null

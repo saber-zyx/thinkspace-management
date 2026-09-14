@@ -294,3 +294,127 @@
 - **File ảnh hưởng**: `.env.example`, `scripts/run-live-log-ingestion-loop.ps1`, `docs/plan/09-decision-log.md`, `docs/plan/15-moodle-log-ingestion-architecture.md`, `tests/test_main.py`.
 - **Cách chạy local**: Sau khi cấu hình `MOODLE_LOG_SOURCE_DATABASE_URL` trong `.env` và restart app, chạy `.\scripts\run-live-log-ingestion-loop.ps1 -IntervalMinutes 30`.
 - **Ghi chú học tập**: Script này đóng vai trò scheduler đơn giản. Trong data engineering thực tế, bước này có thể được thay bằng cron, GitHub Actions, Airflow, Dagster hoặc Prefect, nhưng logic cốt lõi vẫn là gọi một batch incremental có watermark và audit.
+
+## TASK-046: Thử Hướng Export Moodle Logs Qua UI Automation
+- **Trạng thái**: Hoàn thành bước export một lần và auto-import vào API local.
+- **Mục tiêu**: Có phương án lấy log khi không được cấp quyền database/server Moodle.
+- **File ảnh hưởng**: `.env.example`, `requirements-data.txt`, `scripts/export_moodle_logs_once.py`, `docs/plan/15-moodle-log-ingestion-architecture.md`, `tests/test_main.py`.
+- **Cách chạy thử**: `python scripts/export_moodle_logs_once.py`.
+- **Cách vận hành v0**: Script đăng nhập Moodle UI, tải CSV log, gọi `POST /api/v1/moodle-logs/import-csv`, sau đó chuyển file sang `data/archive/moodle_logs` hoặc `data/failed/moodle_logs`.
+- **Ghi chú học tập**: Đây là dạng extractor dùng UI automation. Nó phù hợp khi chưa có API/database access, nhưng vẫn cần audit, chống trùng và giới hạn tần suất để không phụ thuộc quá mạnh vào giao diện Moodle.
+
+## TASK-047: Chạy Pipeline Moodle UI Logs Theo Chu Kỳ Ở Localhost
+- **Trạng thái**: Hoàn thành script loop local.
+- **Mục tiêu**: Cho phép pipeline `Moodle UI export -> import CSV -> bronze/silver/gold -> dashboard` chạy lặp lại mỗi 30-60 phút.
+- **File ảnh hưởng**: `scripts/run-moodle-ui-log-pipeline-loop.ps1`, `.gitignore`, `docs/plan/15-moodle-log-ingestion-architecture.md`, `docs/plan/09-decision-log.md`, `tests/test_main.py`.
+- **Cách chạy**: `.\scripts\run-moodle-ui-log-pipeline-loop.ps1 -IntervalMinutes 30`.
+- **Cách test một vòng**: `.\scripts\run-moodle-ui-log-pipeline-loop.ps1 -IntervalMinutes 30 -MaxRuns 1`.
+- **Ghi chú học tập**: Đây là orchestration tối giản. Script loop đóng vai trò scheduler; `export_moodle_logs_once.py` đóng vai trò extractor/loader; PostgreSQL và SQL views đóng vai trò warehouse/transformation.
+
+## TASK-048: Chuyển Silver Learning Events Sang dbt
+- **Trạng thái**: Hoàn thành bước chuyển song song và kiểm chứng local.
+- **Mục tiêu**: Bắt đầu chuyển lớp transform lõi từ Python startup SQL sang dbt model có test và lineage.
+- **File ảnh hưởng**: `analytics/dbt_thinkspace/dbt_project.yml`, `analytics/dbt_thinkspace/models/silver/silver_moodle_learning_events.sql`, `analytics/dbt_thinkspace/models/silver/schema.yml`, `docs/plan/16-dbt-transformation-workflow.md`, `docs/plan/09-decision-log.md`, `tests/test_main.py`.
+- **Nguyên tắc chuyển đổi**: dbt model chạy trong schema `analytics`, chưa thay nguồn đọc dashboard ở schema `public` cho đến khi count và metric khớp ổn định.
+- **SQL kiểm chứng**: So sánh `COUNT(*)` giữa `public.silver_moodle_learning_events` và `analytics.silver_moodle_learning_events`.
+- **Kết quả kiểm chứng**: `dbt debug`, `dbt run`, `dbt test` đều thành công; `27` data tests pass. `public.silver_moodle_learning_events` và `analytics.silver_moodle_learning_events` đều có `8,787` dòng trên dữ liệu local hiện tại.
+- **Phân phối tín hiệu hiện tại**: `access = 7,330`, `submission_final = 1,414`, `submission_work = 43`.
+
+## TASK-049: Chuyển Gold Registered User Summary Sang dbt
+- **Trạng thái**: Hoàn thành bước chuyển song song và kiểm chứng local.
+- **Mục tiêu**: Tạo mart cấp thí sinh bằng dbt để dashboard có nguồn tổng hợp rõ grain, có test và dễ giải thích trong portfolio.
+- **File ảnh hưởng**: `analytics/dbt_thinkspace/dbt_project.yml`, `analytics/dbt_thinkspace/models/marts/learning/gold_registered_user_learning_summary.sql`, `analytics/dbt_thinkspace/models/marts/learning/schema.yml`, `docs/plan/16-dbt-transformation-workflow.md`, `docs/plan/09-decision-log.md`, `tests/test_main.py`.
+- **Grain**: Một dòng đại diện cho một thí sinh đăng ký chương trình.
+- **SQL kiểm chứng**: So sánh `COUNT(*)` và phân phối `current_learning_status` giữa `public.gold_registered_user_learning_summary` và `analytics.gold_registered_user_learning_summary`.
+- **Kết quả kiểm chứng**: `dbt debug`, `dbt run`, `dbt test` đều thành công; `36` data tests pass. `public.gold_registered_user_learning_summary` và `analytics.gold_registered_user_learning_summary` đều có `112` dòng trên dữ liệu local hiện tại.
+- **Phân phối trạng thái hiện tại**: `active = 52`, `not_started = 59`, `submitted = 1`.
+- **Ghi chú học tập**: Đây là bước chuyển từ Silver fact sang Gold mart. Silver giữ event chi tiết, còn Gold tóm tắt theo grain thí sinh để dashboard và manager đọc nhanh.
+
+## TASK-050: Tạo Gold Project Learning Summary Bằng dbt
+- **Trạng thái**: Hoàn thành bước chuyển song song và kiểm chứng local.
+- **Mục tiêu**: Tạo mart cấp dự án để thống nhất cách tính giữa dự án đội và dự án cá nhân.
+- **File ảnh hưởng**: `analytics/dbt_thinkspace/models/marts/learning/gold_project_learning_summary.sql`, `analytics/dbt_thinkspace/models/marts/learning/schema.yml`, `docs/plan/16-dbt-transformation-workflow.md`, `docs/plan/09-decision-log.md`, `tests/test_main.py`.
+- **Grain**: Một dòng đại diện cho một dự án. Dự án đội dùng `team_name_key`; dự án cá nhân dùng `email`.
+- **Kết quả kiểm chứng**: `dbt run` tạo thành công `analytics.gold_project_learning_summary`; `dbt test` pass `44` data tests. Dữ liệu local hiện tại có `44` dự án, gồm `24` dự án đội và `20` dự án cá nhân.
+- **Phân phối trạng thái hiện tại**: `active = 30`, `not_started = 13`, `submitted = 1`.
+- **Ghi chú học tập**: Đây là bước chuyển grain từ user-level sang project-level. Khi phỏng vấn, cần giải thích rõ vì sao một nhóm nhiều người vẫn chỉ tính là một dự án trong các metric cấp quản lý.
+
+## TASK-051: Tạo Gold Milestone Traction Summary Bằng dbt
+- **Trạng thái**: Hoàn thành bước chuyển song song và kiểm chứng local.
+- **Mục tiêu**: Đưa logic `Traction theo milestone` ra khỏi API dài và chuyển thành mart dbt có test.
+- **File ảnh hưởng**: `analytics/dbt_thinkspace/models/marts/learning/gold_milestone_traction_summary.sql`, `analytics/dbt_thinkspace/models/marts/learning/schema.yml`, `docs/plan/16-dbt-transformation-workflow.md`, `docs/plan/09-decision-log.md`, `tests/test_main.py`.
+- **Grain**: Một dòng đại diện cho một milestone quan trọng trong dashboard.
+- **Phạm vi v0**: `Milestone 1`, `Milestone 2`, `Milestone 3`, `Milestone 4`, `Milestone 5`, `Final Submission`.
+- **Metric v0**: `guideline_view_count`, `guideline_user_count`, `submission_done_count`, `submission_done_project_count`, và `submitted_projects`.
+- **Kết quả kiểm chứng**: `dbt run` tạo thành công `analytics.gold_milestone_traction_summary`; `dbt test` pass `53` data tests. Mart có `6` dòng đúng theo `6` milestone.
+- **Ghi chú học tập**: Đây là ví dụ về Gold mart phục vụ dashboard trực tiếp. API nên đọc mart này thay vì tự viết CTE dài khi chuyển sang kiến trúc dbt-first.
+
+## TASK-052: Hoàn thiện dbt Analytics Workflow v1 Cho Learning Dashboard
+- **Trạng thái**: Hoàn thành trên local.
+- **Mục tiêu**: Chuyển phần lớn logic transform analytics của Learning Dashboard sang dbt để có source, staging, intermediate, silver, gold, test và docs lineage.
+- **File ảnh hưởng**: `analytics/dbt_thinkspace/models/sources.yml`, `analytics/dbt_thinkspace/models/staging/`, `analytics/dbt_thinkspace/models/marts/learning/`, `tests/test_main.py`, `docs/plan/16-dbt-transformation-workflow.md`, `docs/plan/09-decision-log.md`.
+- **Source đã khai báo**: `registrations`, `raw_moodle_participants`, `bronze_moodle_log_events`, `raw_ueh_lms_course_enrollments`.
+- **Model dbt hiện có**: `19` view trong schema `analytics`, gồm staging, identity map, silver event, dimension activity và các gold mart cho user, dự án, milestone, spotlight, survey gate, foundation course, enrollment UEH LMS.
+- **Kết quả kiểm chứng**: `dbt run` pass `19/19`; `dbt test` pass `113/113`; `dbt docs generate` tạo catalog thành công; `pytest tests/test_main.py -q` pass `28/28`.
+- **Metric local hiện tại**: `112` thí sinh đăng ký, `44` dự án, `24` dự án đội, `20` dự án cá nhân, `6` milestone traction, `4` activity spotlight.
+- **Ghi chú học tập**: Đây là dbt workflow v1 chạy song song với schema `public`. Bước sau mới refactor API/dashboard sang đọc các mart `analytics` hoặc materialize các mart ra `public` tùy chiến lược deploy.
+
+## TASK-053: Chuyen API Learning Dashboard sang doc dbt mart truoc
+- **Trang thai**: Hoan thanh local.
+- **Muc tieu**: Bat dau chuyen runtime dashboard sang kien truc dbt-first bang cach cho cac endpoint analytics uu tien schema `analytics`, va fallback ve `public` neu dbt chua chay.
+- **File anh huong**: `src/app/api/moodle_logs.py`, `tests/test_main.py`, `docs/plan/16-dbt-transformation-workflow.md`, `docs/plan/09-decision-log.md`.
+- **Thay doi chinh**: `learning-dashboard-overview` doc cac mart dbt `gold_daily_learning_interactions`, `gold_milestone_traction_summary`, `gold_key_activity_spotlights`, `gold_pre_program_gate_summary`, `gold_foundation_course_summary`, `gold_ueh_lms_entrepreneurship_enrollment_summary`, `gold_activity_type_summary`, `gold_submission_activities_summary`, va `gold_project_learning_summary`.
+- **Ket qua kiem chung**: `pytest tests/test_main.py -q` pass `28/28`. `dbt run --profiles-dir . --threads 1` pass `19/19`. `dbt test --profiles-dir . --threads 1` pass `113/113`. Endpoint local tra `data_schema = analytics`.
+- **Ghi chu hoc tap**: FastAPI van con can thiet de lam API, upload/import file, goi Moodle, va phuc vu frontend. dbt khong thay FastAPI; dbt thay the phan SQL transform dai nam trong app.
+
+## TASK-054: Chuyen Cac Mart Detail va Overview Con Lai Sang dbt
+- **Trang thai**: Hoan thanh va da kiem chung local.
+- **Muc tieu**: Dua cac aggregation con sot cua Learning Dashboard ra khoi FastAPI va chuyen thanh cac gold mart dbt co grain ro rang.
+- **File anh huong**: `analytics/dbt_thinkspace/models/marts/learning/`, `analytics/dbt_thinkspace/models/marts/learning/schema.yml`, `src/app/api/moodle_logs.py`, `tests/test_main.py`, `docs/plan/16-dbt-transformation-workflow.md`, `docs/plan/09-decision-log.md`.
+- **Model dbt moi**: `gold_top_viewed_activities`, `gold_low_attention_activities`, `gold_recent_submissions`, `gold_submitted_projects`, `gold_learning_activity_detail`, `gold_ueh_lms_entrepreneurship_enrollment_detail`.
+- **Grain chinh**:
+  - `gold_learning_activity_detail`: mot dong la mot thi sinh dang ky trong mot Moodle activity da co log.
+  - `gold_top_viewed_activities` va `gold_low_attention_activities`: mot dong la mot Moodle activity/module.
+  - `gold_recent_submissions`: mot dong la mot log nop bai hoan tat.
+  - `gold_submitted_projects`: mot dong la mot du an da co it nhat mot log nop bai.
+  - `gold_ueh_lms_entrepreneurship_enrollment_detail`: mot dong la mot thi sinh Sandbox match email voi danh sach UEH LMS Entrepreneurship.
+- **Ket qua kiem chung hien tai**: `pytest tests/test_main.py -q` pass `28/28`; `dbt run --profiles-dir . --threads 1` pass `25/25`; `dbt test --profiles-dir . --threads 1` pass `139/139`; endpoint `learning-dashboard-overview` tra `data_schema = analytics`; endpoint `individual-activities-detail` doc duoc mart detail moi.
+- **Ghi chu hoc tap**: Day la buoc bien FastAPI thanh lop serving/API. Khi dashboard can metric, uu tien tao mart dbt roi API doc mart do; khong viet them CTE dai trong endpoint neu do la transform co the tai su dung.
+
+## TASK-055: Xoa Legacy SQL View Startup Sau Khi dbt On Dinh
+- **Trang thai**: Hoan thanh va da kiem chung local.
+- **Muc tieu**: Don dep logic cu trong FastAPI/core de tranh hai noi cung dinh nghia mot metric analytics.
+- **File anh huong**: `src/app/core/database.py`, `src/app/main.py`, `tests/test_main.py`, `docs/plan/09-decision-log.md`, `docs/plan/16-dbt-transformation-workflow.md`.
+- **Thay doi chinh**: Da xoa cac ham startup tao view `int_moodle_user_identity_map`, `silver_moodle_learning_events`, `dim_moodle_course_activities`, `gold_user_learning_summary`, `gold_registered_user_learning_summary`, `gold_team_learning_summary`, `gold_individual_learning_summary` trong app. Startup chi con tao bang SQLAlchemy va cac migration nhe cho bang nguon.
+- **Ranh gioi giu lai**: Khong xoa service import, raw/bronze table, API upload, API dashboard, hay Moodle integration. Cac phan nay van thuoc FastAPI/Python.
+- **Ket qua kiem chung**: `python -m py_compile` pass; `pytest tests/test_main.py -q` pass `28/28`; `dbt run --profiles-dir . --threads 1` pass `25/25`; `dbt test --profiles-dir . --threads 1` pass `139/139`; restart app local thanh cong va `learning-dashboard-overview` tra `data_schema = analytics`.
+- **Ghi chu hoc tap**: Day la buoc cleanup sau migration. Trong doanh nghiep, khong nen giu hai implementation cua cung mot metric qua lau vi de gay lech so lieu giua dashboard, API va dbt lineage.
+
+## TASK-056: Chuan Hoa Lenh Refresh Analytics Local
+- **Trang thai**: Hoan thanh va da kiem chung local.
+- **Muc tieu**: Gom cac thao tac sau khi co log moi thanh mot lenh local duy nhat de giam loi van hanh thu cong.
+- **File anh huong**: `scripts/run-local-analytics-refresh.ps1`, `scripts/run-moodle-ui-log-pipeline-loop.ps1`, `tests/test_main.py`, `docs/plan/15-moodle-log-ingestion-architecture.md`, `docs/plan/16-dbt-transformation-workflow.md`.
+- **Lenh chinh**: `.\scripts\run-local-analytics-refresh.ps1`.
+- **Cac buoc script thuc hien**: Dam bao Docker services `db` va `app` dang chay, chay `dbt run --threads 1 --quiet`, chay `dbt test --threads 1 --quiet`, va goi `learning-dashboard-overview` de xac nhan `data_schema = analytics`.
+- **Che do hoc/debug**: Dung `.\scripts\run-local-analytics-refresh.ps1 -VerboseDbt` de xem log dbt chi tiet.
+- **Ket qua kiem chung**: `pytest tests/test_main.py -q` pass; script refresh local pass va dashboard overview tra `data_schema = analytics`.
+- **Ghi chu hoc tap**: Day la buoc orchestration nhe. Trong data engineering, orchestration la viec noi ingest, transform, validate va serve thanh mot workflow co the lap lai.
+
+## TASK-057: Chuan Hoa Refresh Analytics Cho Live Render/Neon
+- **Trang thai**: Hoan thanh va da kiem chung bang target local gia lap.
+- **Muc tieu**: Tao mot lenh rieng de chay dbt tren Neon va kiem tra dashboard Render ma khong reset du lieu live.
+- **File anh huong**: `scripts/run-live-analytics-refresh.ps1`, `.env.example`, `analytics/dbt_thinkspace/profiles.example.yml`, `analytics/dbt_thinkspace/profiles.yml`, `tests/test_main.py`, `docs/plan/14-demo-deploy-render-neon.md`, `docs/plan/09-decision-log.md`.
+- **Lenh chinh**: `.\scripts\run-live-analytics-refresh.ps1`.
+- **Bien moi truong can co**: `TARGET_DATABASE_URL` la connection string Neon; `RENDER_APP_BASE_URL` la URL Render live.
+- **Cac buoc script thuc hien**: Parse connection string Neon thanh bien dbt, chay `dbt run --threads 1 --quiet`, chay `dbt test --threads 1 --quiet`, va goi API Render de xac nhan `data_schema = analytics`.
+- **Ket qua kiem chung**: `pytest tests/test_main.py -q` pass `28/28`; `python -m py_compile` pass; script `run-live-analytics-refresh.ps1` pass khi truyen `TARGET_DATABASE_URL` local va `RENDER_APP_BASE_URL=http://localhost:8080`.
+- **Ghi chu hoc tap**: Seed/restore la buoc load data, con refresh analytics la buoc transform/validate/serve. Trong production, hai viec nay nen tach ro de tranh vo tinh xoa du lieu live.
+
+## TASK-058: Chuan Hoa Sync Demo Data Tu Local Len Neon Theo dbt-First
+- **Trang thai**: Hoan thanh va da kiem chung bang static test.
+- **Muc tieu**: Cap nhat `seed-neon-demo.ps1` de sync data local len Neon xong tu dong chay workflow dbt live refresh, thay cho cach cu import FastAPI de tao view analytics.
+- **File anh huong**: `scripts/seed-neon-demo.ps1`, `tests/test_main.py`, `docs/plan/14-demo-deploy-render-neon.md`, `docs/plan/09-decision-log.md`.
+- **Lenh chinh**: `.\scripts\seed-neon-demo.ps1 -ResetTarget`.
+- **Thay doi chinh**: Xoa buoc `import src.app.main` de tao view analytics; them buoc goi `run-live-analytics-refresh.ps1`; them kiem tra count cac mart `analytics.gold_registered_user_learning_summary`, `analytics.gold_project_learning_summary`, `analytics.gold_milestone_traction_summary`.
+- **Ket qua kiem chung**: PowerShell parser pass cho `seed-neon-demo.ps1` va `run-live-analytics-refresh.ps1`; `pytest tests/test_main.py -q` pass `28/28`.
+- **Ghi chu hoc tap**: Day la workflow bootstrap/sync demo data. Khi du lieu da co san tren Neon, chi can chay `run-live-analytics-refresh.ps1`, khong can seed lai.

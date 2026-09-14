@@ -247,3 +247,106 @@
 - **Lý do**: Cách này dễ quan sát khi học data engineering: người vận hành thấy từng run, số dòng lấy về, số dòng insert, số dòng trùng và watermark trước/sau. Nó cũng tránh việc web app tự chạy job ẩn khi nguồn Moodle chưa được cấu hình chắc chắn.
 - **Điều kiện chạy thật**: `.env` local cần có `MOODLE_LOG_SOURCE_DATABASE_URL` read-only tới Moodle log store/database thật. Nếu endpoint status báo `is_configured = false`, script dừng để tránh tạo nhiều run `not_configured`.
 - **Hướng nâng cấp**: Khi local ổn định, có thể chuyển scheduler sang cron, GitHub Actions, Airflow, Dagster hoặc Prefect mà vẫn giữ nguyên endpoint, bảng state và bảng run audit.
+
+## ADR-046: Dùng UI Automation Export Logs Khi Không Có Quyền Database Moodle
+- **Quyết định**: Thêm script `scripts/export_moodle_logs_once.py` dùng Playwright để đăng nhập Moodle UI và tải file Logs export về `data/incoming/moodle_logs`.
+- **Lý do**: Người dùng hiện không được cấp quyền server/database Moodle, trong khi Web Service function hiện có không cung cấp raw live logs. UI automation là phương án trung gian để giảm thao tác tải file thủ công.
+- **Ranh giới**: Đây chưa phải ingestion production chuẩn. Script phụ thuộc giao diện Moodle, quyền export report và session đăng nhập.
+- **Nguyên tắc bảo mật**: `MOODLE_UI_USERNAME` và `MOODLE_UI_PASSWORD` chỉ nằm trong `.env` local hoặc secret manager, không commit lên Git hoặc tài liệu.
+- **Hướng nâng cấp**: Khi có quyền tốt hơn, ưu tiên thay bằng Moodle custom Web Service hoặc read-only log store/database.
+
+## ADR-047: Auto-Import File Moodle Log Sau Khi UI Export Thành Công
+- **Quyết định**: `scripts/export_moodle_logs_once.py` mặc định gọi API local `POST /api/v1/moodle-logs/import-csv` ngay sau khi tải CSV từ Moodle UI.
+- **Lý do**: Người vận hành không cần tải file rồi upload thủ công vào app. Luồng này biến thao tác UI export thành pipeline `extract -> load -> bronze -> silver/gold`.
+- **Cơ chế file**: File import thành công được chuyển vào `data/archive/moodle_logs`; file lỗi chuyển vào `data/failed/moodle_logs`.
+- **Chống trùng**: API import hiện có vẫn dùng `event_hash`, nên cùng một log xuất hiện trong nhiều file export sẽ được tính vào `duplicate_count` và không nhân đôi dashboard.
+- **Giới hạn**: Đây vẫn là scheduler/file-based ingestion. Khi có API/database chính thức, giữ nguyên raw/bronze/silver/gold và thay phần extractor.
+
+## ADR-048: Orchestration Local Cho Moodle UI Log Pipeline
+- **Quyết định**: Dùng `scripts/run-moodle-ui-log-pipeline-loop.ps1` làm scheduler local để gọi `scripts/export_moodle_logs_once.py` theo chu kỳ.
+- **Lý do**: Người dùng đang học data engineering nên cần nhìn rõ từng bước vận hành trước khi đưa tool nặng như Airflow/Dagster/Prefect vào. Script loop đủ để demo quy trình incremental gần real-time ở localhost.
+- **Tần suất khuyến nghị**: Bắt đầu với 30 phút/lần. Không chạy 60 giây/lần khi nguồn là UI Moodle vì dễ tạo tải không cần thiết và dễ bị ảnh hưởng bởi session/UI.
+- **Quản lý dữ liệu file**: `data/` là vùng local runtime cho incoming/archive/failed/debug và không commit lên Git.
+- **Hướng nâng cấp**: Khi quy trình ổn, thay loop bằng Windows Task Scheduler, cron, GitHub Actions self-hosted runner, Prefect hoặc Dagster.
+
+## ADR-049: Chuyển Silver Learning Events Sang dbt Theo Kiểu Song Song
+- **Quyết định**: Thêm model `analytics.silver_moodle_learning_events` trong dbt, phản ánh logic hiện có của `public.silver_moodle_learning_events`.
+- **Lý do**: `silver_moodle_learning_events` là bảng lõi của dashboard học tập. Chuyển model này sang dbt giúp pipeline có transform SQL có version, test, lineage và phù hợp hơn với portfolio Data Engineer.
+- **Chiến lược an toàn**: Dashboard vẫn đọc `public.silver_moodle_learning_events` trong giai đoạn đầu. dbt chạy song song trong schema `analytics` để so sánh count/metric trước khi chuyển nguồn đọc.
+- **Test chất lượng dữ liệu**: dbt kiểm tra `bronze_event_id` unique/not null, `event_time` not null, `event_category = learning`, và `progress_signal_type` thuộc nhóm tín hiệu hợp lệ.
+
+## ADR-050: Tạo Gold Registered User Mart Bằng dbt
+- **Quyết định**: Thêm model `analytics.gold_registered_user_learning_summary` trong dbt với grain một dòng cho một thí sinh đăng ký.
+- **Lý do**: Đây là mart trung tâm để trả lời câu hỏi quản lý: ai đã vào nền tảng, ai chưa bắt đầu, ai đang active/inactive, ai đã nộp bài. Đưa mart này vào dbt giúp định nghĩa chỉ số nằm trong SQL có test thay vì nằm rải trong API/dashboard.
+- **Chiến lược an toàn**: Tiếp tục chạy song song với `public.gold_registered_user_learning_summary`; dashboard chưa đổi nguồn đọc cho đến khi count và phân phối trạng thái khớp.
+- **Test chất lượng dữ liệu**: dbt kiểm tra `registration_id` unique/not null, `email` unique/not null, trạng thái học tập hợp lệ và các count chính không null.
+- **Kết quả kiểm chứng local**: `public` và `analytics` đều có `112` dòng; phân phối trạng thái khớp gồm `active = 52`, `not_started = 59`, `submitted = 1`; `dbt test` pass `36/36`.
+
+## ADR-051: Tạo Gold Project Mart Bằng dbt
+- **Quyết định**: Thêm model `analytics.gold_project_learning_summary` để gom dự án đội và dự án cá nhân vào cùng một mart cấp quản lý.
+- **Lý do**: Dashboard hiện đã chuyển ngôn ngữ quản lý từ đội sang dự án. Nếu chỉ giữ riêng `gold_team_learning_summary` và `gold_individual_learning_summary`, API phải tự cộng metric và dễ lặp logic.
+- **Quy tắc grain**: Một dòng là một dự án. Dự án đội dùng `team_name_key`; dự án cá nhân dùng `email`.
+- **Chiến lược an toàn**: Chạy song song trong schema `analytics`. Dashboard chưa đổi sang đọc mart này cho đến khi các API hiện tại được refactor có kiểm chứng.
+- **Kết quả kiểm chứng local**: Mart có `44` dự án, gồm `24` dự án đội và `20` dự án cá nhân; trạng thái gồm `active = 30`, `not_started = 13`, `submitted = 1`; `dbt test` pass `44/44`.
+
+## ADR-052: Tạo Gold Milestone Traction Mart Bằng dbt
+- **Quyết định**: Thêm model `analytics.gold_milestone_traction_summary` để quản lý metric traction theo milestone trong dbt.
+- **Lý do**: Logic traction milestone đang nằm trong CTE dài ở API. Đưa sang dbt giúp metric có lineage, test, và dễ giải thích trong portfolio data engineering.
+- **Phạm vi metric**: Chỉ giữ `Guideline Viewed` và `Submission Done` theo feedback hiện tại. Không đưa `Submission Viewed` trở lại.
+- **Quy tắc project submission**: Dùng `COALESCE(team_name_key, email)` từ registered user để đếm dự án duy nhất đã nộp bài.
+- **Chiến lược an toàn**: Chạy song song trong schema `analytics`; API/dashboard chưa đổi nguồn đọc cho đến khi bước refactor endpoint được kiểm chứng riêng.
+- **Kết quả kiểm chứng local**: Mart có `6` dòng milestone; `dbt test` pass `53/53`.
+
+## ADR-053: Hoàn Thiện dbt Analytics Workflow v1
+- **Quyết định**: Mở rộng dbt từ các model lõi sang gần đầy đủ các transform phục vụ Learning Dashboard: activity dimension, user/team/individual/project gold mart, daily interactions, milestone traction, key spotlights, pre-program gate, foundation course và UEH LMS enrollment summary.
+- **Lý do**: Dashboard đang có nhiều CTE dài trong API. Đưa metric sang dbt giúp tách trách nhiệm: app lo ingest/API/UI, dbt lo transform và kiểm soát chất lượng dữ liệu.
+- **Chiến lược an toàn**: dbt tiếp tục chạy trong schema `analytics`. Chưa xóa view `public` và chưa bắt dashboard đọc schema `analytics` trong cùng bước này.
+- **Kết quả kiểm chứng local**: `19` dbt models build thành công, `113` data tests pass, `dbt docs generate` tạo catalog thành công.
+- **Lỗi đã xử lý**: `gold_key_activity_spotlights` ban đầu bị nhân `total_moodle_log_rows` do join dimension với event detail cùng lúc. Đã tách thành aggregate dimension và aggregate event trước khi join.
+- **Bước kế tiếp**: Refactor API sang đọc mart `analytics` hoặc thiết kế job deploy dbt cho Neon để live dashboard dùng cùng logic transform.
+## ADR-054: API Learning Dashboard Uu Tien Doc Schema analytics Cua dbt
+- **Quyet dinh**: Cac endpoint doc analytics cua Learning Dashboard se goi `use_analytics_schema_if_available` de set `search_path = analytics, public` khi dbt schema da san sang. Neu dbt chua chay, API fallback ve cac view `public` cu.
+- **Ly do**: Day la cach chuyen doi an toan tu SQL transform trong FastAPI sang dbt. Dashboard co the bat dau dung mart dbt ma khong lam hong luong demo local/Render neu moi truong nao do chua build `analytics`.
+- **Pham vi buoc nay**: `learning-dashboard-overview` doc cac dbt gold mart cho daily interaction, milestone traction, key spotlights, survey gate, foundation course, UEH LMS enrollment, activity type, submission activities va project summary.
+- **Ranh gioi trach nhiem**: FastAPI van phu trach upload/import, Moodle integration, API endpoint va frontend static. dbt phu trach transform staging/intermediate/silver/gold va data tests.
+- **Van hanh**: Khi chay local nen dung `dbt run --profiles-dir . --threads 1` de tranh deadlock khi PostgreSQL build nhieu view phu thuoc song song.
+
+## ADR-055: Dua Detail Mart va Overview Aggregation Sang dbt
+- **Quyet dinh**: Tao them cac mart `gold_top_viewed_activities`, `gold_low_attention_activities`, `gold_recent_submissions`, `gold_submitted_projects`, `gold_learning_activity_detail` va `gold_ueh_lms_entrepreneurship_enrollment_detail`; cac endpoint dashboard se doc truc tiep cac mart nay.
+- **Ly do**: Cac endpoint detail/overview truoc do van con nhieu `GROUP BY`, CTE va rule match du lieu. Day la logic transform, nen nen nam trong dbt de co lineage, test va kha nang giai thich theo dung workflow Data Engineer.
+- **Ranh gioi moi**: FastAPI khong bi loai bo. FastAPI van lam import/upload, orchestration endpoint, API JSON va static frontend. dbt chi nhan phan chuan hoa, aggregate va mart analytics.
+- **Chien luoc an toan**: API van dung `use_analytics_schema_if_available`, nen moi truong da build dbt se doc schema `analytics`, moi truong chua build dbt van co the fallback sang `public` cho cac view cu con ton tai.
+- **Kiem chung**: Da pass `pytest tests/test_main.py -q`; `dbt run --profiles-dir . --threads 1` pass `25/25`; `dbt test --profiles-dir . --threads 1` pass `139/139`; endpoint local tra `data_schema = analytics`.
+
+## ADR-056: Xoa Legacy Analytics View Creation Khoi FastAPI Startup
+- **Quyet dinh**: Sau khi dbt build/test thanh cong, xoa cac ham `ensure_*_view` tao view analytics trong `src/app/core/database.py` va bo goi cac ham nay khoi `src/app/main.py`.
+- **Ly do**: Cung mot metric khong nen duoc dinh nghia dong thoi trong FastAPI va dbt. dbt la noi chinh thuc cho transform analytics, con FastAPI la lop ingestion/API/UI.
+- **Pham vi xoa**: Chi xoa code tao view analytics cu. Khong xoa raw/bronze tables, import CSV, live ingestion, dashboard endpoints, hay SQLAlchemy models.
+- **Dieu kien van hanh moi**: Moi truong local/live can chay dbt sau khi nap du lieu moi de cap nhat schema `analytics`. API se uu tien doc `analytics` khi schema nay san sang.
+- **Kiem chung**: `pytest` pass `28/28`, `dbt run` pass `25/25`, `dbt test` pass `139/139`, app local restart thanh cong va dashboard overview doc `data_schema = analytics`.
+
+## ADR-057: Chuan Hoa Local Analytics Refresh Thanh Mot Script
+- **Quyet dinh**: Them `scripts/run-local-analytics-refresh.ps1` lam lenh van hanh local sau moi lan co du lieu log/enrollment moi.
+- **Ly do**: Sau khi xoa legacy view startup, app khong tu tao lai mart analytics nua. Can mot workflow ro rang de chay dbt va kiem tra dashboard, tranh viec import log xong nhung dashboard van doc mart cu.
+- **Pham vi**: Script local se kiem tra Docker services, chay `dbt run`, chay `dbt test`, va goi API overview de xac nhan `data_schema = analytics`.
+- **Van hanh**: Mac dinh script chay dbt voi `--quiet` de terminal gon. Khi can hoc/debug chi tiet, dung `-VerboseDbt`.
+- **Tich hop**: `run-moodle-ui-log-pipeline-loop.ps1` se goi script refresh nay sau khi export/import log thanh cong.
+- **Kiem chung**: `pytest tests/test_main.py -q` pass; refresh script local pass va API overview tra `data_schema = analytics`.
+- **Huong nang cap**: Sau nay co the thay script nay bang Prefect, Dagster, Airflow, cron hoac GitHub Actions ma van giu cung cac buoc logic.
+
+## ADR-058: Tach Refresh Analytics Live Khoi Seed/Reset Neon
+- **Quyet dinh**: Them `scripts/run-live-analytics-refresh.ps1` de chay dbt tren Neon va kiem tra API Render ma khong reset schema/data live.
+- **Ly do**: Sau khi dashboard live da co du lieu, khong nen dung script seed/reset cho moi lan cap nhat analytics. Reset phu hop cho demo bootstrap, con refresh analytics phu hop cho van hanh lap lai.
+- **Bien cau hinh**: Script doc `TARGET_DATABASE_URL` va `RENDER_APP_BASE_URL` tu bien moi truong. Khong ghi connection string vao code, docs hoac Git.
+- **Ket noi dbt**: Script parse connection string Neon thanh `DBT_POSTGRES_HOST`, `DBT_POSTGRES_PORT`, `DBT_POSTGRES_DB`, `DBT_POSTGRES_USER`, `DBT_POSTGRES_PASSWORD`, `DBT_POSTGRES_SSLMODE`.
+- **Kiem soat chat luong**: Mac dinh chay `dbt run` va `dbt test` voi `--threads 1 --quiet`; co `-VerboseDbt` de xem log chi tiet khi hoc/debug.
+- **Xu ly SSL**: Neu connection string co `sslmode`, script dung gia tri do. Neu khong co, host local dung `prefer`, host cloud dung `require`.
+- **Ranh gioi**: Script nay khong ingest log moi va khong copy data tu local sang Neon. No chi rebuild mart `analytics` tren du lieu da co trong target database.
+- **Kiem chung**: Da pass test contract va chay thanh cong voi target local gia lap truoc khi dung Neon that.
+
+## ADR-059: Seed Neon dbt-First Khong Tao View Bang FastAPI Startup
+- **Quyet dinh**: Cap nhat `scripts/seed-neon-demo.ps1` de sau khi restore schema/data len Neon se goi `scripts/run-live-analytics-refresh.ps1`, thay vi import `src.app.main` de tao view phan tich.
+- **Ly do**: Sau migration dbt-first, FastAPI khong con la noi dinh nghia analytics view. Neu seed script van import app de tao view, workflow live se lech voi kien truc moi va de gay nham lan khi hoc data engineering.
+- **Ranh gioi**: `seed-neon-demo.ps1` van la workflow sync/demo data, co the reset schema `public` khi truyen `-ResetTarget`. `run-live-analytics-refresh.ps1` la workflow transform/validate/serve tren database target.
+- **Kiem tra moi**: Sau khi refresh analytics, script query count mot so mart chinh trong schema `analytics` de xac nhan dbt da build duoc tren target.
+- **Tuy chon debug**: Co `-SkipLiveAnalyticsRefresh` neu chi muon restore data de debug, va co `-VerboseDbt` de xem log dbt chi tiet.

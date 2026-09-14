@@ -118,12 +118,63 @@ Script sẽ:
 - Dump data bằng `--column-inserts` để tránh lệch thứ tự cột giữa local và Neon.
 - Reset schema `public` trên Neon nếu truyền `-ResetTarget`.
 - Restore schema và data lên Neon.
-- Gọi code app để tạo lại các view phân tích `int/silver/gold`.
+- Gọi `scripts/run-live-analytics-refresh.ps1` để chạy dbt và tạo/cập nhật schema `analytics`.
 - Kiểm tra số dòng của `registrations`, `raw_moodle_participants`, `bronze_moodle_log_events`.
+- Kiểm tra số dòng một số mart chính trong schema `analytics`.
 
 Không commit connection string Neon vào Git. Chỉ set tạm bằng biến môi trường trong terminal.
 
 Sau khi seed xong, mở lại app Render và bấm `Ctrl + F5` để kiểm tra dashboard.
+
+Từ sau bước chuyển sang dbt-first, lệnh sync demo đầy đủ nên là:
+
+```powershell
+$env:TARGET_DATABASE_URL="connection string Neon"
+$env:RENDER_APP_BASE_URL="https://thinkspace-management.onrender.com"
+.\scripts\seed-neon-demo.ps1 -ResetTarget
+Remove-Item Env:\TARGET_DATABASE_URL
+Remove-Item Env:\RENDER_APP_BASE_URL
+```
+
+Luồng này sẽ copy data local lên Neon, sau đó tự chạy dbt live refresh. Nếu chỉ muốn restore data để debug và chưa muốn chạy dbt/API check:
+
+```powershell
+.\scripts\seed-neon-demo.ps1 -ResetTarget -SkipLiveAnalyticsRefresh
+```
+
+## Refresh Analytics Live Không Reset Dữ Liệu
+
+Sau khi dữ liệu đã có sẵn trên Neon, không nên dùng `seed-neon-demo.ps1 -ResetTarget` cho mỗi lần cập nhật dashboard. Script reset chỉ phù hợp khi cần copy lại toàn bộ demo data từ local sang Neon.
+
+Với trường hợp chỉ cần cập nhật các mart `analytics` sau khi Neon đã có raw/bronze data, dùng script:
+
+```powershell
+$env:TARGET_DATABASE_URL="connection string Neon"
+$env:RENDER_APP_BASE_URL="https://thinkspace-management.onrender.com"
+.\scripts\run-live-analytics-refresh.ps1
+Remove-Item Env:\TARGET_DATABASE_URL
+Remove-Item Env:\RENDER_APP_BASE_URL
+```
+
+Script này sẽ:
+
+- Đọc `TARGET_DATABASE_URL` từ biến môi trường, không ghi connection string vào code.
+- Tách host, port, database, user, password và `sslmode` để dbt kết nối Neon.
+- Chạy `dbt run --profiles-dir . --threads 1 --quiet`.
+- Chạy `dbt test --profiles-dir . --threads 1 --quiet`.
+- Gọi API Render `/api/v1/moodle-logs/learning-dashboard-overview` để xác nhận dashboard live đang đọc `data_schema = analytics`.
+
+Khi cần xem log dbt chi tiết để học/debug:
+
+```powershell
+.\scripts\run-live-analytics-refresh.ps1 -VerboseDbt
+```
+
+Nếu chỉ muốn build/test dbt trên Neon mà chưa muốn gọi Render API:
+
+```powershell
+.\scripts\run-live-analytics-refresh.ps1 -SkipApiCheck
+```
 
 ## Rủi Ro Demo
 
